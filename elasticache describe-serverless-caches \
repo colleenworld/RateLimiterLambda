@@ -1,0 +1,18 @@
+[
+    {
+        "SubnetId": "subnet-0351955e",
+        "VpcId": "vpc-7f60f807"
+    },
+    {
+        "SubnetId": "subnet-847563cf",
+        "VpcId": "vpc-7f60f807"
+    },
+    {
+        "SubnetId": "subnet-e7205fcc",
+        "VpcId": "vpc-7f60f807"
+    },
+    {
+        "SubnetId": "subnet-b5c336cd",
+        "VpcId": "vpc-7f60f807"
+    }
+]

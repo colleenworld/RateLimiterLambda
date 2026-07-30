@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  CacheBaseName:
+    Type: String
+
+  Environment:
+    Type: String
+
+  ProjectName:
+    Type: String
+    Default: payment-demo
+
+  ValKeySecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+
+Resources:
+
+  #########################################
+  # ElastiCache User Group
+  #########################################
+
+  ValKeyUser:
+    Type: AWS::ElastiCache::User
+    Properties:
+      UserId: !Sub "${Environment}${ProjectName}valkeyuser"
+      UserName: !Sub "${Environment}${ProjectName}valkeyuser"
+      Engine: valkey
+      AccessString: "on ~* +@read +@write +@scripting"
+      AuthenticationMode:
+        Type: iam
+
+  ValKeyUserGroup:
+    Type: AWS::ElastiCache::UserGroup
+    Properties:
+      Engine: valkey
+      UserGroupId:
+        !Sub "${Environment}-${ProjectName}-users"
+      UserIds:
+        - !Ref ValKeyUser
+
+  #########################################
+  # Serverless Valkey Cache
+  #########################################
+
+  ValKeyCache:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      Engine: valkey
+      ServerlessCacheName: !Sub "${Environment}-${ProjectName}-${CacheBaseName}"
+      UserGroupId: !Ref ValKeyUserGroup
+      SecurityGroupIds:
+        - !Ref ValKeySecurityGroupId
+      SubnetIds:
+        !Ref PrivateSubnetIds
+
+Outputs:
+  CacheArn:
+    Value: !GetAtt ValKeyCache.ARN
+
+  CacheEndpoint:
+    Value: !GetAtt ValKeyCache.Endpoint.Address
+
+  CacheName:
+    Value: !Ref ValKeyCache
+
+  UserArn:
+    Value: !GetAtt ValKeyUser.Arn
+
+  UserName:
+    Value: !Sub "${Environment}-${ProjectName}-valkey-user"

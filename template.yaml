@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Payment Demo Token Bucket Rate Limiter
+
+Parameters:
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+  ProjectName:
+    Type: String
+    Default: payment-demo
+
+  CacheBaseName:
+    Type: String
+    Default: valkey-cache
+
+  Capacity:
+    Type: String
+    Default: 20
+
+  RefillRate:
+    Type: Number
+    Default: 2
+
+  MemorySize:
+    Type: Number
+    Default: 512
+
+  Timeout:
+    Type: Number
+    Default: 30
+
+  ApiLogRetentionDays:
+    Type: Number
+    Default: 7
+
+  LambdaLogRetentionDays:
+    Type: Number
+    Default: 7
+
+Resources:
+
+  #########################################
+  # API Gateway
+  #########################################
+
+  GatewayStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./stacks/gateway.yaml
+
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LogRetentionDays: !Ref ApiLogRetentionDays
+        LambdaFunctionArn: !GetAtt LambdaStack.Outputs.LambdaFunctionArn
+
+  #########################################
+  # Network Infrastructure
+  #########################################
+
+  NetworkStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./stacks/network.yaml
+
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+
+  #########################################
+  # Valkey Cache
+  #########################################
+
+  ValkeyCacheStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./stacks/cache.yaml
+
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        CacheBaseName: !Ref CacheBaseName
+        ValKeySecurityGroupId: !GetAtt NetworkStack.Outputs.ValKeySecurityGroupId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+
+  #########################################
+  # Rate Limiter Lambda
+  #########################################
+      
+  LambdaStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./stacks/lambda.yaml
+
+      Parameters:
+      
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+
+        ValKeySecurityGroupId: !GetAtt NetworkStack.Outputs.ValKeySecurityGroupId
+        PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
+        CacheArn: !GetAtt ValkeyCacheStack.Outputs.CacheArn
+        CacheEndpoint: !GetAtt ValkeyCacheStack.Outputs.CacheEndpoint
+        CacheName: !GetAtt ValkeyCacheStack.Outputs.CacheName
+
+        UserArn: !GetAtt ValkeyCacheStack.Outputs.UserArn
+        UserName: !GetAtt ValkeyCacheStack.Outputs.UserName
+
+        Capacity: !Ref Capacity
+        RefillRate: !Ref RefillRate
+
+        MemorySize: !Ref MemorySize
+        Timeout: !Ref Timeout
+        LogRetentionDays: !Ref LambdaLogRetentionDays
+          
+  #########################################
+  # Monitoring
+  #########################################         
+  
+  MonitoringStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./stacks/monitoring.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LambdaFunctionName: !GetAtt LambdaStack.Outputs.LambdaFunction
+        LogRetentionDays: !Ref ApiLogRetentionDays

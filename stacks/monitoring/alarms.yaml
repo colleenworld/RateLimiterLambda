@@ -1,0 +1,110 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Monitoring resources (alarms) for the Payment Demo
+
+Parameters:
+  Environment:
+    Type: String
+  ProjectName:
+    Type: String
+  LambdaFunctionName:
+    Type: String
+
+Resources:
+
+  #########################################################
+  # SNS Topic
+  #########################################################
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${Environment}-${ProjectName}-alarms"
+
+  #########################################################
+  # Lambda Errors
+  #########################################################
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-lambda-errors"
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  #########################################################
+  # Lambda Duration
+  #########################################################
+
+  LambdaDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-lambda-duration"
+      Namespace: AWS/Lambda
+      MetricName: Duration
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  #########################################################
+  # Lambda Throttles
+  #########################################################
+
+  LambdaThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-lambda-throttles"
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  #########################################################
+  # Lambda Invocations
+  #########################################################
+
+  LambdaInvocationsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-no-invocations"
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: breaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunctionName
+
+Outputs:
+  AlarmTopicArn:
+    Value: !Ref AlarmTopic

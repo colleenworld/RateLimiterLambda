@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "paymentDemoStack"
+resolve_s3 = true
+s3_prefix = "paymentDemoStack"
+confirm_changeset = true
+capabilities = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+image_repositories = []
+parameter_overrides = "Environment=\"dev\" ProjectName=\"payment-demo\" CacheBaseName=\"valkey-cache\" Capacity=\"20\" RefillRate=\"2\" MemorySize=\"512\" Timeout=\"30\" ApiLogRetentionDays=\"7\" LambdaLogRetentionDays=\"7\""
+disable_rollback = true
+
+[default.global.parameters]
+region = "us-west-2"

@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Monitoring resources for the Payment Demo
+
+Parameters:
+  Environment:
+    Type: String
+  ProjectName:
+    Type: String
+  LambdaFunctionName:
+    Type: String
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+
+Resources:
+  #########################################
+  # Logs
+  #########################################
+  Logs:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./monitoring/logs.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LambdaFunctionName: !Ref LambdaFunctionName
+        LogRetentionDays: !Ref LogRetentionDays
+
+  #########################################
+  # Alarms
+  #########################################
+  Alarms:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./monitoring/alarms.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LambdaFunctionName: !Ref LambdaFunctionName
+
+  #########################################
+  # Dashboards
+  #########################################
+  Dashboards:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./monitoring/dashboards.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LambdaFunctionName: !Ref LambdaFunctionName
+
+Outputs:
+  DashboardName:
+    Description: Lambda Function Name
+    Value: !GetAtt Dashboards.Outputs.DashboardName
+
+  AlarmTopicArn:
+    Value: !GetAtt Alarms.Outputs.AlarmTopic.ARN

@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+
+  LambdaFunctionArn:
+    Type: String
+
+  Environment:
+    Type: String
+
+  ProjectName:
+    Type: String
+
+  LogRetentionDays:
+    Type: Number
+
+Resources:
+
+  #########################################################
+  # API Access Logs
+  #########################################################
+
+  ApiAccessLogStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./gateway/logging.yaml
+      Parameters:
+        RetentionInDays: !Ref LogRetentionDays
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+
+  #########################################################
+  # API Gateway
+  #########################################################
+
+  ApiStack:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./gateway/api.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProjectName: !Ref ProjectName
+        LambdaFunctionArn: !Ref LambdaFunctionArn
+        ApiAccessLogArn: !GetAtt ApiAccessLogStack.Outputs.ApiAccessLog
+        ApiCloudWatchRoleArn: !GetAtt ApiAccessLogStack.Outputs.CloudWatchRoleArn
+
+  #########################################################
+  # API Routes
+  #########################################################
+
+Outputs:
+  ApiStackId:
+    Value: !Sub ApiStack.Api
+
+  ApiStackUrl:
+    Value: !Sub "https://${ApiStack}.execute-api.${AWS::Region}.amazonaws.com/v1/"

@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: payment-demo
+
+  Environment:
+    Type: String
+
+  Capacity:
+    Type: Number
+
+  RefillRate:
+    Type: Number
+
+  MemorySize:
+    Type: Number
+
+  Timeout:
+    Type: Number
+
+  LogRetentionDays:
+    Type: Number
+
+  CacheArn:
+    Type: String
+
+  CacheName:
+    Type: String
+
+  CacheEndpoint:
+    Type: String
+
+  UserArn:
+    Type: String
+
+  UserName:
+    Type: String
+
+  ValKeySecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+
+Resources:
+  #########################################
+  # Lambda Execution Role
+  #########################################
+
+  PaymentDemoLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+      Policies:
+        - PolicyName: ElastiCacheIAMAuth
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticache:Connect
+                Resource:
+                - !Ref CacheArn
+                - !Ref UserArn
+
+
+  #########################################
+  # Lambda Function
+  #########################################
+
+  PaymentDemoRateLimiter:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${Environment}-${ProjectName}-rate-limiter"
+      CodeUri: ../src/RateLimiter
+      Handler: lambda_fn.handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      MemorySize: 512
+      Timeout: 30
+      Role:
+        !GetAtt PaymentDemoLambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          CAPACITY: !Ref Capacity
+          REFILL_RATE: !Ref RefillRate
+          VALKEY_USER: !Ref UserName
+          CACHE_NAME: !Ref CacheName
+          ELASTICACHE_HOST: !Ref CacheEndpoint
+          ENVIRONMENT: !Ref Environment
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref ValKeySecurityGroupId
+        SubnetIds:
+          !Ref PrivateSubnetIds
+
+  PaymentDemoRateLimiterLogGroup:
+    Type: AWS::Logs::LogGroup
+    DependsOn: PaymentDemoRateLimiter
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${Environment}-${ProjectName}-rate-limiter"
+      RetentionInDays: !Ref LogRetentionDays
+
+Outputs:
+  LambdaFunction:
+    Description: Lambda function name
+    Value:
+      !Ref PaymentDemoRateLimiter
+
+  LambdaFunctionArn:
+    Value: !GetAtt PaymentDemoRateLimiter.Arn

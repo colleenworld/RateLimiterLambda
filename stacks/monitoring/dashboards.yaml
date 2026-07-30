@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform:
+  - AWS::LanguageExtensions
+  - AWS::Serverless-2016-10-31
+Description: Monitoring resources for the Payment Demo
+
+Parameters:
+  Environment:
+    Type: String
+  ProjectName:
+    Type: String
+  LambdaFunctionName:
+    Type: String
+
+Resources:
+  #########################################################
+  # Dashboard
+  #########################################################
+
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${Environment}-${ProjectName}"
+      DashboardBody:
+        Fn::ToJsonString:
+          widgets:
+            - type: metric
+              x: 0
+              y: 0
+              width: 12
+              height: 6
+              properties:
+                region: !Ref AWS::Region
+                title: Lambda Requests
+                label: Lambda Requests
+                view: timeSeries
+                period: 300
+                stat: Sum
+                metrics:
+                  - - AWS/Lambda
+                    - Invocations
+                    - FunctionName
+                    - !Ref LambdaFunctionName
+                  - - AWS/Lambda
+                    - Errors
+                    - FunctionName
+                    - !Ref LambdaFunctionName
+                  - - AWS/Lambda
+                    - Throttles
+                    - FunctionName
+                    - !Ref LambdaFunctionName
+
+            - type: metric
+              x: 12
+              y: 0
+              width: 12
+              height: 6
+              properties:
+                region: !Ref AWS::Region
+                title: Lambda Duration
+                label: Lambda Duration
+                view: timeSeries
+                period: 300
+                stat: Average
+                metrics:
+                  - - AWS/Lambda
+                    - Duration
+                    - FunctionName
+                    - !Ref LambdaFunctionName
+
+Outputs:
+  DashboardName:
+    Value: !Ref Dashboard
