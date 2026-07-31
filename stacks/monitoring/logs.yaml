@@ -4,8 +4,10 @@ Description: Monitoring resources (log group) for the Payment Demo
 Parameters:
   LambdaFunctionName:
     Type: String
+
   LogRetentionDays:
     Type: Number
+
 Resources:
 
   #########################################################

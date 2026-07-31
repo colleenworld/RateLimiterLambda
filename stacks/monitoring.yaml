@@ -15,19 +15,6 @@ Parameters:
 
 Resources:
   #########################################
-  # Logs
-  #########################################
-  Logs:
-    Type: AWS::Serverless::Application
-    Properties:
-      Location: ./monitoring/logs.yaml
-      Parameters:
-        Environment: !Ref Environment
-        ProjectName: !Ref ProjectName
-        LambdaFunctionName: !Ref LambdaFunctionName
-        LogRetentionDays: !Ref LogRetentionDays
-
-  #########################################
   # Alarms
   #########################################
   Alarms:
@@ -50,11 +37,3 @@ Resources:
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
         LambdaFunctionName: !Ref LambdaFunctionName
-
-Outputs:
-  DashboardName:
-    Description: Lambda Function Name
-    Value: !GetAtt Dashboards.Outputs.DashboardName
-
-  AlarmTopicArn:
-    Value: !GetAtt Alarms.Outputs.AlarmTopic.ARN
