@@ -12,6 +12,9 @@ Parameters:
     Type: String
     Default: payment-demo
 
+  ValKeyUserName:
+    Type: String
+
   ValKeySecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
 
@@ -27,8 +30,8 @@ Resources:
   ValKeyUser:
     Type: AWS::ElastiCache::User
     Properties:
-      UserId: !Sub "${Environment}${ProjectName}valkeyuser"
-      UserName: !Sub "${Environment}${ProjectName}valkeyuser"
+      UserId: !Ref ValKeyUserName
+      UserName: !Ref ValKeyUserName
       Engine: valkey
       AccessString: "on ~* +@read +@write +@scripting"
       AuthenticationMode:
@@ -70,6 +73,3 @@ Outputs:
 
   UserArn:
     Value: !GetAtt ValKeyUser.Arn
-
-  UserName:
-    Value: !Sub "${Environment}-${ProjectName}-valkey-user"

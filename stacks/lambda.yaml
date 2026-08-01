@@ -34,13 +34,13 @@ Parameters:
   CacheEndpoint:
     Type: String
 
-  UserArn:
+  ValKeyUserArn:
     Type: String
 
-  UserName:
+  ValKeyUserName:
     Type: String
 
-  ValKeySecurityGroupId:
+  LambdaSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
 
   PrivateSubnetIds:
@@ -77,8 +77,7 @@ Resources:
                   - elasticache:Connect
                 Resource:
                 - !Ref CacheArn
-                - !Ref UserArn
-
+                - !Ref ValKeyUserArn
 
   #########################################
   # Lambda Function
@@ -101,13 +100,13 @@ Resources:
         Variables:
           CAPACITY: !Ref Capacity
           REFILL_RATE: !Ref RefillRate
-          VALKEY_USER: !Ref UserName
+          VALKEY_USER: !Ref ValKeyUserName
           CACHE_NAME: !Ref CacheName
           ELASTICACHE_HOST: !Ref CacheEndpoint
           ENVIRONMENT: !Ref Environment
       VpcConfig:
         SecurityGroupIds:
-          - !Ref ValKeySecurityGroupId
+          - !Ref LambdaSecurityGroupId
         SubnetIds:
           !Ref PrivateSubnetIds
 

@@ -19,7 +19,12 @@ class MetricLogger:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.emit()
+        try:
+            if self.metrics:
+                self.emit()
+        except Exception:
+            logger.exception("Failed to emit metrics")
+
         return False
 
     def metric(self, name: str, value: float, unit: str = "Count"):

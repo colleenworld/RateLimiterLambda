@@ -91,7 +91,7 @@ class Provider(CredentialProvider):
 
 _client = None
 
-def get_client(metrics=None):
+def get_client():
     global _client
 
     if _client is None:
@@ -99,12 +99,10 @@ def get_client(metrics=None):
             host=os.environ["ELASTICACHE_HOST"],
             port=6379,
             ssl=True,
-            credential_provider=Provider(metrics),
+            credential_provider=Provider(),
             decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
         )
 
-        if metrics:
-            metrics.metric(
-                "ValkeyClientCreated",
-                1
-            )
+    return _client

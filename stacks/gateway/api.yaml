@@ -106,7 +106,7 @@ Resources:
       AccessLogSetting:
         DestinationArn: !Ref ApiAccessLogArn
         Format: !Sub >
-          {"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","path":"$context.path","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength","integrationLatency":"$context.integrationLatency"}
+          {"requestId":"$context.requestId","status":"$context.status","integrationStatus":"$context.integration.status","integrationError":"$context.integrationErrorMessage","integrationLatency":"$context.integrationLatency","responseLatency":"$context.responseLatency"}'
 
   #########################################################
   # Allow API Gateway to invoke the Lambda

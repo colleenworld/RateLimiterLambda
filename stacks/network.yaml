@@ -178,42 +178,38 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnetC
 
-  #########################################################
-  # Lambda Security Group
-  #########################################################
-
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Lambda security group
+      GroupDescription: Security group for the rate limiter Lambda
       VpcId: !Ref VPC
-
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
 
-  #########################################################
-  # Valkey Security Group
-  #########################################################
-
-  ValkeySecurityGroup:
+  ValKeySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Valkey security group
+      GroupDescription: Security group for the Valkey cache
       VpcId: !Ref VPC
 
-  #########################################################
-  # Lambda -> Valkey Rule
-  #########################################################
-
-  ValkeyIngress:
-    Type: AWS::EC2::SecurityGroupIngress
+  LambdaToValKeyEgress:
+    Type: AWS::EC2::SecurityGroupEgress
     Properties:
-      GroupId: !Ref ValkeySecurityGroup
-      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 6379
-      ToPort: 6379
+      ToPort: 6380
+      DestinationSecurityGroupId: !Ref ValKeySecurityGroup
+
+  ValKeyFromLambdaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ValKeySecurityGroup
+      IpProtocol: tcp
+      FromPort: 6379
+      ToPort: 6380
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
 
 Outputs:
   VpcId:
@@ -223,7 +219,7 @@ Outputs:
     Value: !Ref LambdaSecurityGroup
 
   ValKeySecurityGroupId:
-    Value: !Ref ValkeySecurityGroup
+    Value: !Ref ValKeySecurityGroup
 
   PrivateSubnetIds:
     Value: !Join

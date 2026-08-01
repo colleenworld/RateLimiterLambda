@@ -88,6 +88,7 @@ Resources:
         ProjectName: !Ref ProjectName
         CacheBaseName: !Ref CacheBaseName
         ValKeySecurityGroupId: !GetAtt NetworkStack.Outputs.ValKeySecurityGroupId
+        ValKeyUserName: !Sub "${Environment}${ProjectName}valkeyuser"
         PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
 
   #########################################
@@ -103,19 +104,15 @@ Resources:
       
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
-
-        ValKeySecurityGroupId: !GetAtt NetworkStack.Outputs.ValKeySecurityGroupId
+        LambdaSecurityGroupId: !GetAtt NetworkStack.Outputs.LambdaSecurityGroupId
         PrivateSubnetIds: !GetAtt NetworkStack.Outputs.PrivateSubnetIds
         CacheArn: !GetAtt ValkeyCacheStack.Outputs.CacheArn
         CacheEndpoint: !GetAtt ValkeyCacheStack.Outputs.CacheEndpoint
         CacheName: !GetAtt ValkeyCacheStack.Outputs.CacheName
-
-        UserArn: !GetAtt ValkeyCacheStack.Outputs.UserArn
-        UserName: !GetAtt ValkeyCacheStack.Outputs.UserName
-
+        ValKeyUserName: !Sub "${Environment}${ProjectName}valkeyuser"
+        ValKeyUserArn: !GetAtt ValkeyCacheStack.Outputs.UserArn
         Capacity: !Ref Capacity
         RefillRate: !Ref RefillRate
-
         MemorySize: !Ref MemorySize
         Timeout: !Ref Timeout
         LogRetentionDays: !Ref LambdaLogRetentionDays
