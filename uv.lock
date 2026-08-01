@@ -69,6 +69,15 @@ wheels = [
 ]
 
 [[package]]
+name = "cachetools"
+version = "7.1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/55/af/861ebc2e318a5c3300e3eb63bc4d30f3d70a46d13b360093728ac0705eed/cachetools-7.1.6.tar.gz", hash = "sha256:c7a79e7f30ba9943c1cefd08cc36f006aaae086e017af9166f1d59d6170c47e1", size = 40572, upload-time = "2026-07-23T22:47:53.737Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/f2/2086ba18a925a73586c4d4e61d25f4a6058e56fd00d77ce8f1d361ab4c9b/cachetools-7.1.6-py3-none-any.whl", hash = "sha256:2c12e255780330af28b91bb7fb96cce4c766f04e38396b9a24510190a5827096", size = 16954, upload-time = "2026-07-23T22:47:52.397Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -253,6 +262,7 @@ dependencies = [
     { name = "aws-lambda-powertools" },
     { name = "boto3" },
     { name = "boto3-stubs" },
+    { name = "cachetools" },
     { name = "pyyaml" },
     { name = "valkey" },
 ]
@@ -269,6 +279,7 @@ requires-dist = [
     { name = "aws-lambda-powertools", specifier = ">=3.31.1" },
     { name = "boto3", specifier = ">=1.43.54" },
     { name = "boto3-stubs", specifier = "~=1.43.54" },
+    { name = "cachetools", specifier = ">=7.1.6" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "valkey", specifier = "==6.1.1" },
 ]

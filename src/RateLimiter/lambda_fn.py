@@ -2,6 +2,7 @@ import json
 import os
 import time
 import logging
+import lambda_fn
 from metric_logger import MetricLogger
 from token_bucket import TokenBucket
 

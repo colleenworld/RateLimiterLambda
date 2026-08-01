@@ -2,3 +2,4 @@
 /.venv/
 /.idea/
 /uv.lock
+/py.txt
