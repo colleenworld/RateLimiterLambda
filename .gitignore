@@ -1,5 +1,7 @@
 /.aws-sam/
 /.venv/
 /.idea/
-/uv.lock
 /py.txt
+/__pycache__/
+/*.pyc
+/.pytest_cache/
