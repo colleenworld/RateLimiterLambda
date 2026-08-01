@@ -1,5 +1,4 @@
 from unittest.mock import Mock, patch
-
 from token_bucket import TokenBucket, RateLimitResult
 
 

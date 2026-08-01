@@ -44,7 +44,6 @@ def handler(event, _context):
             body.get("customer_id")
             or body.get("key")
             or normalized_headers.get("x-customer-id")
-            or "default"
         )
 
         if not customer_id:
@@ -122,21 +121,15 @@ def handler(event, _context):
             }),
         }
 
-    except Exception as error:
-        print(json.dumps({
-            "level": "ERROR",
-            "message": "Unhandled request failure",
-            "error": str(error),
-            "errorType": type(error).__name__,
-        }))
-
+    except Exception:
+        logger.exception("Unhandled request failure")
         return {
             "statusCode": 500,
             "headers": {
-                "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
             },
             "body": json.dumps({
                 "error": "internal_server_error",
             }),
         }
+
