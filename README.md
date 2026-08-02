@@ -177,30 +177,37 @@ Rejected request:
   }
 }
 ```
+
+The implementation intentionally separates concerns:
+
+lambda_fn.py handles request processing
+token_bucket.py handles rate limiting logic
+provider.py handles infrastructure authentication
+metric_logger.py handles observability
+
+This keeps the core rate limiting behavior testable and allows infrastructure components to evolve independently.
 ## CloudWatch Metrics
 
-The application uses CloudWatch Embedded Metric Format (EMF).
+The application uses CloudWatch Embedded Metric Format (EMF).  Instead of making separate API calls for every metric, metrics are written into structured Lambda logs.
 
-Instead of making separate API calls for every metric, metrics are written into structured Lambda logs.
+For example:
 
-Example metrics:
-
-| Metric    | Description |
-|-----------| ----------- |
-| HandlerLatency    | Lambda execution latency      |
-| AllowedRequests | Requests allowed by limiter     |
-| RejectedRequests | Requests blocked      |
-| RemainingTokens | Remaining customer capacity       |
+| Metric           | Description                    |
+|------------------|--------------------------------|
+| HandlerLatency   | Lambda execution latency       |
+| AllowedRequests  | Requests allowed by limiter    |
+| RejectedRequests | Requests blocked               |
+| RemainingTokens  | Remaining customer capacity    |
 
 A single invocation can emit multiple metrics in one log event.
 
-### Monitoring
+## Monitoring
 
 The monitoring stack is split into separate resources:
 
-#### Logs
+### Logs
 
-stacks/monitoring/logs.yaml
+**stacks/monitoring/logs.yaml**
 
 Creates:
 
@@ -208,7 +215,7 @@ Creates:
 -Configurable retention
 -Alarms
 
-stacks/monitoring/alarms.yaml
+**stacks/monitoring/alarms.yaml**
 
 Currently monitors:
 
@@ -218,7 +225,7 @@ Currently monitors:
 -Missing invocations
 -Dashboards
 
-stacks/monitoring/dashboards.yaml
+**stacks/monitoring/dashboards.yaml**
 
 Current widgets:
 
@@ -266,7 +273,7 @@ Unit Tests
 
 Unit tests cover:
 
-Lambda
+### Lambda
 Successful requests return HTTP 200
 Rate limited requests return HTTP 429
 Token bucket dependency is mocked
@@ -274,24 +281,24 @@ Metric Logger
 
 Tests:
 
-Metric registration
-EMF payload generation
-Provider
+-Metric registration
+-EMF payload generation
+-Provider
 
 Tests:
 
-IAM signing
-Credential generation
-Credential caching
-Token Bucket
+-IAM signing
+-Credential generation
+-Credential caching
+-Token Bucket
 
 Tests:
 
-Requests consume tokens
-Empty buckets reject requests
-Refilling restores capacity
-Multiple customers have isolated buckets
-Integration Tests
+-Requests consume tokens
+-Empty buckets reject requests
+-Refilling restores capacity
+-Multiple customers have isolated buckets
+-Integration Tests
 
 Integration tests verify the real Valkey behavior.
 
@@ -323,50 +330,4 @@ Run tests:
 uv run pytest
 AWS Deployment
 
-Build:
 
-sam build
-
-Deploy:
-
-sam deploy --guided
-
-The deployment creates:
-
-Lambda function
-IAM roles
-ElastiCache resources
-CloudWatch monitoring resources
-Future Improvements
-
-Potential production enhancements:
-
-Observability
-AWS X-Ray tracing
-Distributed trace IDs
-Correlation IDs
-Additional business metrics
-Reliability
-Retry queues
-Dead-letter queues
-Multi-region deployment
-Automated failover testing
-Performance
-Load testing
-Cache latency dashboards
-Adaptive rate limits
-API Integration
-API Gateway integration
-Request authentication
-Per-endpoint limits
-Customer-tier based limits
-Design Notes
-
-The implementation intentionally separates concerns:
-
-lambda_fn.py handles request processing
-token_bucket.py handles rate limiting logic
-provider.py handles infrastructure authentication
-metric_logger.py handles observability
-
-This keeps the core rate limiting behavior testable and allows infrastructure components to evolve independently.
