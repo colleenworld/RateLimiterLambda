@@ -53,4 +53,5 @@ jobs:
         run: |
           sam deploy \
             --no-confirm-changeset \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset \
+            --role-arn arn:aws:iam::808822697548:role/paymentDemoCloudFormationExecutionRole
