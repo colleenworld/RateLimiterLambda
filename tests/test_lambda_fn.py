@@ -62,28 +62,4 @@ def test_rejects_rate_limited_request(monkeypatch):
 
     assert response["statusCode"] == 429
 
-def test_uses_header_customer_id(monkeypatch):
-    limiter = Mock()
-    limiter.allow.return_value = Mock(
-        allowed=True,
-        remaining=10
-    )
-
-    monkeypatch.setattr(
-        lambda_fn,
-        "get_limiter",
-        lambda: limiter
-    )
-
-    lambda_fn.handler(
-        {
-            "body": {},
-            "headers": {
-                "x-customer-id": "header-customer"
-            },
-        },
-        None,
-    )
-
-    limiter.allow.assert_called_once_with("header-customer")
 

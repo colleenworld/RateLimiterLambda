@@ -2,6 +2,7 @@ import boto3
 from botocore.model import ServiceId
 from botocore.signers import RequestSigner
 from cachetools import TTLCache, cached
+import time
 import os
 import valkey
 from valkey.credentials import CredentialProvider
