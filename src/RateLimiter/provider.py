@@ -3,10 +3,10 @@ from botocore.model import ServiceId
 from botocore.signers import RequestSigner
 from cachetools import TTLCache, cached
 import os
-import time
 import valkey
 from valkey.credentials import CredentialProvider
 from urllib.parse import ParseResult, urlencode, urlunparse
+
 
 class Provider(CredentialProvider):
     def __init__(self, metrics=None):

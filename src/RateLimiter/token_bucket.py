@@ -1,5 +1,10 @@
 from dataclasses import dataclass
 from provider import get_client
+from errors import (
+    ValkeyUnavailableError,
+    ValkeyAuthenticationError,
+)
+import valkey
 
 LUA_SCRIPT = """
 local key = KEYS[1]
@@ -60,12 +65,23 @@ class TokenBucket:
 
         now = time.time()
 
-        allowed, remaining = self.script(
-            keys=[f"bucket:{key}"],
-            args=[now, self.capacity, self.refill_rate, tokens],
-        )
+        try:
+            allowed, remaining = self.script(
+                keys=[f"bucket:{key}"],
+               args=[time.time(), self.capacity, self.refill_rate, tokens],
+            )
 
-        return RateLimitResult(
-            allowed=bool(int(allowed)),
-            remaining=float(remaining),
-        )
+            return RateLimitResult(
+                allowed=bool(int(allowed)),
+                remaining=float(remaining),
+            )
+
+        except valkey.AuthenticationError as error:
+            raise ValkeyAuthenticationError(
+                "Unable to authenticate with Valkey"
+            ) from error
+
+        except (valkey.ConnectionError, valkey.TimeoutError) as error:
+            raise ValkeyUnavailableError(
+                "Valkey is unavailable"
+            ) from error

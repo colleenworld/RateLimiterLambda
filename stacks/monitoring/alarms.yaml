@@ -9,6 +9,9 @@ Parameters:
     Type: String
   LambdaFunctionName:
     Type: String
+  LambdaConcurrencyWarningThreshold:
+    Type: Number
+    Default: 8
 
 Resources:
 
@@ -22,7 +25,7 @@ Resources:
       TopicName: !Sub "${Environment}-${ProjectName}-alarms"
 
   #########################################################
-  # Lambda Errors
+  # Lambda error alarm
   #########################################################
 
   LambdaErrorsAlarm:
@@ -32,10 +35,12 @@ Resources:
       Namespace: AWS/Lambda
       MetricName: Errors
       Statistic: Sum
-      Period: 300
+      Period: 60
       EvaluationPeriods: 1
+      DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunctionName
@@ -43,7 +48,7 @@ Resources:
         - !Ref AlarmTopic
 
   #########################################################
-  # Lambda Duration
+  # Lambda duration alarm
   #########################################################
 
   LambdaDurationAlarm:
@@ -52,11 +57,13 @@ Resources:
       AlarmName: !Sub "${Environment}-${ProjectName}-lambda-duration"
       Namespace: AWS/Lambda
       MetricName: Duration
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 2
+      ExtendedStatistic: p95
+      Period: 60
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 2
       Threshold: 1000
       ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunctionName
@@ -64,7 +71,7 @@ Resources:
         - !Ref AlarmTopic
 
   #########################################################
-  # Lambda Throttles
+  # Lambda throttle alarm
   #########################################################
 
   LambdaThrottleAlarm:
@@ -74,36 +81,65 @@ Resources:
       Namespace: AWS/Lambda
       MetricName: Throttles
       Statistic: Sum
-      Period: 300
+      Period: 60
       EvaluationPeriods: 1
+      DatapointsToAlarm: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunctionName
-
       AlarmActions:
         - !Ref AlarmTopic
 
   #########################################################
-  # Lambda Invocations
-  #########################################################
+  # Lambda concurrency alarm
+  ####################cure#################################
 
-  LambdaInvocationsAlarm:
+  LambdaConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-${ProjectName}-no-invocations"
+      AlarmName: !Sub "${Environment}-${ProjectName}-lambda-concurrency"
       Namespace: AWS/Lambda
-      MetricName: Invocations
-      Statistic: Sum
-      Period: 300
+      MetricName: ConcurrentExecutions
+      Statistic: Maximum
+      Period: 60
       EvaluationPeriods: 1
-      Threshold: 0
-      ComparisonOperator: LessThanOrEqualToThreshold
-      TreatMissingData: breaching
+      Threshold: !Ref LambdaConcurrencyWarningThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunctionName
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  #########################################################
+  # 5xx error alarm
+  ####################cure#################################
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-api-5xx"
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub "${Environment}-${ProjectName}"
+        - Name: Stage
+          Value: v1
+      AlarmActions:
+        - !Ref AlarmTopic
+
 
 Outputs:
   AlarmTopicArn:

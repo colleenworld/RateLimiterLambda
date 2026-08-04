@@ -2,7 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
 Parameters:
-
   ProjectName:
     Type: String
     Default: payment-demo
@@ -46,6 +45,19 @@ Parameters:
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
 
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+    Description: >
+      Reserved Lambda concurrency. 0 means use account-level
+      unreserved concurrency.
+
+Conditions:
+  UseReservedConcurrency: !Not
+    - !Equals
+      - !Ref ReservedConcurrency
+      - 0
+
 Resources:
   #########################################
   # Lambda Execution Role
@@ -55,19 +67,38 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
 
       Policies:
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-${ProjectName}-rate-limiter:*"
+
+        - PolicyName: LambdaVpcNetworking
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                  - ec2:AssignPrivateIpAddresses
+                  - ec2:UnassignPrivateIpAddresses
+                Resource: "*"
+
         - PolicyName: ElastiCacheIAMAuth
           PolicyDocument:
             Version: "2012-10-17"
@@ -76,8 +107,8 @@ Resources:
                 Action:
                   - elasticache:Connect
                 Resource:
-                - !Ref CacheArn
-                - !Ref ValKeyUserArn
+                  - !Ref CacheArn
+                  - !Ref ValKeyUserArn
 
   #########################################
   # Lambda Function
@@ -87,6 +118,10 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub "${Environment}-${ProjectName}-rate-limiter"
+      ReservedConcurrentExecutions: !If
+        - UseReservedConcurrency
+        - !Ref ReservedConcurrency
+        - !Ref AWS::NoValue
       CodeUri: ../src/RateLimiter
       Handler: lambda_fn.handler
       Runtime: python3.12

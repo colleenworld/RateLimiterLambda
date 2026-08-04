@@ -1,31 +1,87 @@
+import hashlib
 import json
+import logging
 import os
 import time
-import logging
-import lambda_fn
+
+from errors import (
+    ConfigurationError,
+    ValkeyAuthenticationError,
+    ValkeyUnavailableError,
+)
 from metric_logger import MetricLogger
 from token_bucket import TokenBucket
+
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 ENV = os.environ.get("ENVIRONMENT", "unknown")
+
 _limiter = None
+_cold_start = True
+
 
 def get_limiter():
     global _limiter
 
     if _limiter is None:
-        _limiter = TokenBucket(
-            capacity=int(os.environ["CAPACITY"]),
-            refill_rate=float(os.environ["REFILL_RATE"]),
-        )
+        try:
+            _limiter = TokenBucket(
+                capacity=int(os.environ["CAPACITY"]),
+                refill_rate=float(os.environ["REFILL_RATE"]),
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            raise ConfigurationError(
+                "Invalid rate limiter configuration"
+            ) from error
 
     return _limiter
 
 
-def handler(event, _context):
+def log_event(event_name, **fields):
+    logger.info(json.dumps({
+        "event": event_name,
+        **fields,
+    }))
+
+
+def safe_customer_id(customer_id):
+    return hashlib.sha256(
+        customer_id.encode("utf-8")
+    ).hexdigest()[:12]
+
+
+def response(status_code, body, request_id=None, extra_headers=None):
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+    }
+
+    if request_id:
+        headers["X-Request-Id"] = request_id
+
+    if extra_headers:
+        headers.update(extra_headers)
+
+    return {
+        "statusCode": status_code,
+        "headers": headers,
+        "body": json.dumps(body),
+    }
+
+
+def handler(event, context):
+    global _cold_start
+
     start = time.perf_counter()
+
+    lambda_request_id = getattr(context, "aws_request_id", None)
+
+    request_context = event.get("requestContext") or {}
+    api_request_id = request_context.get("requestId")
+
+    customer_key = None
 
     try:
         body = event.get("body") or {}
@@ -33,31 +89,26 @@ def handler(event, _context):
         if isinstance(body, str):
             body = json.loads(body)
 
-        headers = event.get("headers") or {}
-
-        # API Gateway may normalize header casing differently.
-        normalized_headers = {
-            key.lower(): value
-            for key, value in headers.items()
-        }
-
-        customer_id = (
-            body.get("customer_id")
-            or body.get("key")
-            or normalized_headers.get("x-customer-id")
-        )
+        customer_id = body.get("customer_id")
 
         if not customer_id:
-            return {
-                "statusCode": 400,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                },
-                "body": json.dumps({
+            return response(
+                400,
+                {
                     "error": "customer_id is required",
-                }),
-            }
+                },
+                lambda_request_id,
+            )
+
+        customer_key = safe_customer_id(customer_id)
+
+        log_event(
+            "request_started",
+            lambda_request_id=lambda_request_id,
+            api_request_id=api_request_id,
+            customer_key=customer_key,
+            cold_start=_cold_start,
+        )
 
         limiter = get_limiter()
 
@@ -65,72 +116,140 @@ def handler(event, _context):
             namespace="PaymentDemo",
             dimensions={"Environment": ENV},
         ) as metrics:
-            logger.info("Calling rate limiter", extra={
-                "customer_id": customer_id
-            })
 
             result = limiter.allow(customer_id)
 
-            logger.info("Rate limiter returned", extra={
-                "allowed": result.allowed,
-                "remaining": result.remaining,
-            })
-
             elapsed = (time.perf_counter() - start) * 1000
 
+            log_event(
+                "rate_limit_result",
+                lambda_request_id=lambda_request_id,
+                api_request_id=api_request_id,
+                customer_key=customer_key,
+                allowed=result.allowed,
+                remaining=result.remaining,
+                latency_ms=round(elapsed, 2),
+                cold_start=_cold_start,
+            )
+
             metrics.metric("RemainingTokens", result.remaining)
-            metrics.metric("HandlerLatency", elapsed, "Milliseconds")
+            metrics.metric(
+                "HandlerLatency",
+                elapsed,
+                "Milliseconds",
+            )
 
             if not result.allowed:
                 metrics.metric("RejectedRequests", 1)
 
-                return {
-                    "statusCode": 429,
-                    "headers": {
-                        "Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*",
-                    },
-                    "body": json.dumps({
+                result_response = response(
+                    429,
+                    {
                         "error": "rate_limit_exceeded",
                         "remaining": result.remaining,
-                    }),
-                }
+                    },
+                    lambda_request_id,
+                )
 
-            metrics.metric("AllowedRequests", 1)
+            else:
+                metrics.metric("AllowedRequests", 1)
 
-            return {
-                "statusCode": 200,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*",
-                },
-                "body": json.dumps({
-                    "ok": True,
-                    "remaining": result.remaining,
-                }),
-            }
+                result_response = response(
+                    200,
+                    {
+                        "ok": True,
+                        "remaining": result.remaining,
+                    },
+                    lambda_request_id,
+                )
+
+        _cold_start = False
+
+        return result_response
 
     except json.JSONDecodeError:
-        return {
-            "statusCode": 400,
-            "headers": {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-            },
-            "body": json.dumps({
+        _cold_start = False
+
+        return response(
+            400,
+            {
                 "error": "invalid_json",
-            }),
-        }
-
-    except Exception:
-        logger.exception("Unhandled request failure")
-        return {
-            "statusCode": 500,
-            "headers": {
-                "Access-Control-Allow-Origin": "*",
             },
-            "body": json.dumps({
-                "error": "internal_server_error",
-            }),
-        }
+            lambda_request_id,
+        )
 
+    except ValkeyUnavailableError:
+        elapsed = (time.perf_counter() - start) * 1000
+
+        log_event(
+            "request_failed",
+            lambda_request_id=lambda_request_id,
+            api_request_id=api_request_id,
+            customer_key=customer_key,
+            error_type="ValkeyUnavailableError",
+            latency_ms=round(elapsed, 2),
+            cold_start=_cold_start,
+        )
+
+        logger.exception("Valkey unavailable")
+        _cold_start = False
+
+        return response(
+            503,
+            {
+                "error": "service_unavailable",
+            },
+            lambda_request_id,
+            extra_headers={
+                "Retry-After": "1",
+            },
+        )
+
+    except ValkeyAuthenticationError:
+        logger.exception("Valkey authentication failed")
+        _cold_start = False
+
+        return response(
+            500,
+            {
+                "error": "internal_server_error",
+            },
+            lambda_request_id,
+        )
+
+    except ConfigurationError:
+        logger.exception("Application configuration error")
+        _cold_start = False
+
+        return response(
+            500,
+            {
+                "error": "internal_server_error",
+            },
+            lambda_request_id,
+        )
+
+    except Exception as error:
+        elapsed = (time.perf_counter() - start) * 1000
+
+        logger.exception(
+            json.dumps({
+                "event": "request_failed",
+                "lambda_request_id": lambda_request_id,
+                "api_request_id": api_request_id,
+                "customer_key": customer_key,
+                "error_type": type(error).__name__,
+                "latency_ms": round(elapsed, 2),
+                "cold_start": _cold_start,
+            })
+        )
+
+        _cold_start = False
+
+        return response(
+            500,
+            {
+                "error": "internal_server_error",
+            },
+            lambda_request_id,
+        )

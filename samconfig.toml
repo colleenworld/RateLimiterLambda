@@ -8,7 +8,7 @@ confirm_changeset = true
 capabilities = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
 image_repositories = []
 parameter_overrides = "Environment=\"dev\" ProjectName=\"payment-demo\" CacheBaseName=\"valkey-cache\" Capacity=\"20\" RefillRate=\"2\" MemorySize=\"512\" Timeout=\"30\" ApiLogRetentionDays=\"7\" LambdaLogRetentionDays=\"7\""
-disable_rollback = true
+disable_rollback = false
 
 [default.global.parameters]
 region = "us-west-2"

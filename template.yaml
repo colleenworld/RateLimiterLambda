@@ -4,6 +4,10 @@ Description: Payment Demo Token Bucket Rate Limiter
 
 Parameters:
 
+  ReservedConcurrency:
+    Type: Number
+    Default: 0
+
   Environment:
     Type: String
     Default: dev
@@ -101,7 +105,7 @@ Resources:
       Location: ./stacks/lambda.yaml
 
       Parameters:
-      
+        ReservedConcurrency: !Ref ReservedConcurrency
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
         LambdaSecurityGroupId: !GetAtt NetworkStack.Outputs.LambdaSecurityGroupId

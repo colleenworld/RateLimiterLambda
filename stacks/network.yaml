@@ -183,9 +183,7 @@ Resources:
     Properties:
       GroupDescription: Security group for the rate limiter Lambda
       VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: "-1"
-          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress: []
 
   ValKeySecurityGroup:
     Type: AWS::EC2::SecurityGroup
