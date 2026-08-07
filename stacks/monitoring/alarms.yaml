@@ -95,7 +95,7 @@ Resources:
 
   #########################################################
   # Lambda concurrency alarm
-  ####################cure#################################
+  #########################################################
 
   LambdaConcurrencyAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -116,15 +116,15 @@ Resources:
         - !Ref AlarmTopic
 
   #########################################################
-  # 5xx error alarm
-  ####################cure#################################
+  # Valkey Unavailable
+  #########################################################
 
-  Api5xxAlarm:
+  ValkeyUnavailableAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "${Environment}-${ProjectName}-api-5xx"
-      Namespace: AWS/ApiGateway
-      MetricName: 5XXError
+      AlarmName: !Sub "${Environment}-${ProjectName}-valkey-unavailable"
+      Namespace: PaymentDemo
+      MetricName: ValkeyUnavailable
       Statistic: Sum
       Period: 60
       EvaluationPeriods: 1
@@ -133,13 +133,33 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       Dimensions:
-        - Name: ApiName
-          Value: !Sub "${Environment}-${ProjectName}"
-        - Name: Stage
-          Value: v1
+        - Name: Environment
+          Value: !Ref Environment
       AlarmActions:
         - !Ref AlarmTopic
 
+  #########################################################
+  # Valkey Unavailable
+  #########################################################
+
+  UnhandledErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${Environment}-${ProjectName}-unhandled-errors"
+      Namespace: PaymentDemo
+      MetricName: UnhandledErrors
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: Environment
+          Value: !Ref Environment
+      AlarmActions:
+        - !Ref AlarmTopic
 
 Outputs:
   AlarmTopicArn:
