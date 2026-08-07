@@ -331,12 +331,14 @@ uv run pytest
 AWS Deployment
 
 Run load tests 
-uv run locust \
-    -f load-tests/locustfile.py \
-    --host https://YOUR_API.execute-api.us-west-2.amazonaws.com \
-    --headless \
-    --users 30 \
-    --spawn-rate 30 \
-    --run-time 10s
 
-API_URL="$API" uv run python load_tests/burst_test.py
+TARGET_ENV=dev uv run locust \
+  -f load_tests/locustfile.py \
+  --headless \
+  --users 30 \
+  --spawn-rate 30 \
+  --run-time 10s
+
+uv run python load_tests/burst_test.py \
+  --environment dev \
+  --stack-name paymentDemoStack

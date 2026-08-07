@@ -1,17 +1,17 @@
-import hashlib
 import json
 import logging
 import os
 import time
 
-from errors import (
+from classes.errors import (
     ConfigurationError,
     ValkeyAuthenticationError,
     ValkeyUnavailableError,
 )
-from metric_logger import MetricLogger
-from token_bucket import TokenBucket
-
+from classes.metric_logger import MetricLogger
+from classes.rate_limiter import RateLimiter
+from helpers.policy_resolver import get_policy
+from structures.rate_limit import RateLimitRequest
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -21,16 +21,11 @@ ENV = os.environ.get("ENVIRONMENT", "unknown")
 _limiter = None
 _cold_start = True
 
-
 def get_limiter():
     global _limiter
-
     if _limiter is None:
         try:
-            _limiter = TokenBucket(
-                capacity=int(os.environ["CAPACITY"]),
-                refill_rate=float(os.environ["REFILL_RATE"]),
-            )
+            _limiter = RateLimiter()
         except (KeyError, TypeError, ValueError) as error:
             raise ConfigurationError(
                 "Invalid rate limiter configuration"
@@ -40,35 +35,12 @@ def get_limiter():
 
 
 def log_event(event_name, **fields):
-    logger.info(json.dumps({
-        "event": event_name,
-        **fields,
-    }))
-
-
-def safe_customer_id(customer_id):
-    return hashlib.sha256(
-        customer_id.encode("utf-8")
-    ).hexdigest()[:12]
-
-
-def response(status_code, body, request_id=None, extra_headers=None):
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-    }
-
-    if request_id:
-        headers["X-Request-Id"] = request_id
-
-    if extra_headers:
-        headers.update(extra_headers)
-
-    return {
-        "statusCode": status_code,
-        "headers": headers,
-        "body": json.dumps(body),
-    }
+    logger.info(
+        json.dumps({
+            "event": event_name,
+            **fields,
+        })
+    )
 
 
 def handler(event, context):
@@ -76,63 +48,61 @@ def handler(event, context):
 
     start = time.perf_counter()
 
-    lambda_request_id = getattr(context, "aws_request_id", None)
-
-    request_context = event.get("requestContext") or {}
-    api_request_id = request_context.get("requestId")
-
-    customer_key = None
+    request_id = getattr(
+        context,
+        "aws_request_id",
+        None,
+    )
 
     try:
-        body = event.get("body") or {}
+        policy_id = event.get("policy_id")
 
-        if isinstance(body, str):
-            body = json.loads(body)
+        if not policy_id:
+            return {
+                "ok": False,
+                "error": "invalid_request",
+                "message": "policy_id is required",
+                "request_id": request_id,
+            }
 
-        customer_id = body.get("customer_id")
+        policy = get_policy(policy_id)
 
-        if not customer_id:
-            return response(
-                400,
-                {
-                    "error": "customer_id is required",
-                },
-                lambda_request_id,
-            )
-
-        customer_key = safe_customer_id(customer_id)
+        if not policy.enabled:
+            return {
+                "ok": False,
+                "error": "rate_limiting_disabled",
+                "request_id": request_id,
+            }
 
         log_event(
             "request_started",
-            lambda_request_id=lambda_request_id,
-            api_request_id=api_request_id,
-            customer_key=customer_key,
+            request_id=request_id,
+            policy_id=policy_id,
             cold_start=_cold_start,
         )
 
-        limiter = get_limiter()
-
         with MetricLogger(
             namespace="PaymentDemo",
-            dimensions={"Environment": ENV},
+            dimensions={
+                "Environment": ENV,
+            },
         ) as metrics:
+            limit_request = RateLimitRequest(
+                policy=policy,
+                request_id=context.aws_request_id,
+            )
+            limiter = get_limiter()
+            result = limiter.allow(limit_request)
 
-            result = limiter.allow(customer_id)
+            elapsed = (
+                time.perf_counter() - start
+            ) * 1000
 
-            elapsed = (time.perf_counter() - start) * 1000
-
-            log_event(
-                "rate_limit_result",
-                lambda_request_id=lambda_request_id,
-                api_request_id=api_request_id,
-                customer_key=customer_key,
-                allowed=result.allowed,
-                remaining=result.remaining,
-                latency_ms=round(elapsed, 2),
-                cold_start=_cold_start,
+            metrics.metric(
+                "RemainingTokens",
+                result.remaining,
             )
 
-            metrics.metric("RemainingTokens", result.remaining)
             metrics.metric(
                 "HandlerLatency",
                 elapsed,
@@ -140,116 +110,122 @@ def handler(event, context):
             )
 
             if not result.allowed:
-                metrics.metric("RejectedRequests", 1)
-
-                result_response = response(
-                    429,
-                    {
-                        "error": "rate_limit_exceeded",
-                        "remaining": result.remaining,
-                    },
-                    lambda_request_id,
+                metrics.metric(
+                    "RejectedRequests",
+                    1,
                 )
 
-            else:
-                metrics.metric("AllowedRequests", 1)
-
-                result_response = response(
-                    200,
-                    {
-                        "ok": True,
-                        "remaining": result.remaining,
-                    },
-                    lambda_request_id,
+                log_event(
+                    "rate_limit_result",
+                    request_id=request_id,
+                    policy_id=policy_id,
+                    allowed=False,
+                    remaining=result.remaining,
+                    latency_ms=round(elapsed, 2),
+                    cold_start=_cold_start,
                 )
 
-        _cold_start = False
+                return {
+                    "ok": True,
+                    "allowed": False,
+                    "remaining": result.remaining,
+                    "reason": "rate_limit_exceeded",
+                    "request_id": request_id,
+                }
 
-        return result_response
+            metrics.metric(
+                "AllowedRequests",
+                1,
+            )
 
-    except json.JSONDecodeError:
-        _cold_start = False
+            log_event(
+                "rate_limit_result",
+                request_id=request_id,
+                policy_id=policy_id,
+                allowed=True,
+                remaining=result.remaining,
+                latency_ms=round(elapsed, 2),
+                cold_start=_cold_start,
+            )
 
-        return response(
-            400,
-            {
-                "error": "invalid_json",
-            },
-            lambda_request_id,
-        )
+            return {
+                "ok": True,
+                "allowed": True,
+                "remaining": result.remaining,
+                "request_id": request_id,
+            }
 
     except ValkeyUnavailableError:
-        elapsed = (time.perf_counter() - start) * 1000
+        elapsed = (
+            time.perf_counter() - start
+        ) * 1000
+
+        logger.exception("Valkey unavailable")
 
         log_event(
             "request_failed",
-            lambda_request_id=lambda_request_id,
-            api_request_id=api_request_id,
-            customer_key=customer_key,
+            request_id=request_id,
+            policy_id=policy_id,
             error_type="ValkeyUnavailableError",
             latency_ms=round(elapsed, 2),
             cold_start=_cold_start,
         )
 
-        logger.exception("Valkey unavailable")
-        _cold_start = False
-
-        return response(
-            503,
-            {
-                "error": "service_unavailable",
-            },
-            lambda_request_id,
-            extra_headers={
-                "Retry-After": "1",
-            },
-        )
+        return {
+            "ok": False,
+            "error": "service_unavailable",
+            "retryable": True,
+            "request_id": request_id,
+        }
 
     except ValkeyAuthenticationError:
-        logger.exception("Valkey authentication failed")
-        _cold_start = False
-
-        return response(
-            500,
-            {
-                "error": "internal_server_error",
-            },
-            lambda_request_id,
+        logger.exception(
+            "Valkey authentication failed"
         )
+
+        return {
+            "ok": False,
+            "error": "authentication_failure",
+            "retryable": False,
+            "request_id": request_id,
+        }
 
     except ConfigurationError:
-        logger.exception("Application configuration error")
-        _cold_start = False
-
-        return response(
-            500,
-            {
-                "error": "internal_server_error",
-            },
-            lambda_request_id,
+        logger.exception(
+            "Application configuration error"
         )
+
+        return {
+            "ok": False,
+            "error": "configuration_failure",
+            "retryable": False,
+            "request_id": request_id,
+        }
 
     except Exception as error:
-        elapsed = (time.perf_counter() - start) * 1000
+        elapsed = (
+            time.perf_counter() - start
+        ) * 1000
 
         logger.exception(
-            json.dumps({
-                "event": "request_failed",
-                "lambda_request_id": lambda_request_id,
-                "api_request_id": api_request_id,
-                "customer_key": customer_key,
-                "error_type": type(error).__name__,
-                "latency_ms": round(elapsed, 2),
-                "cold_start": _cold_start,
-            })
+            "Unhandled request failure"
         )
 
+        log_event(
+            "request_failed",
+            request_id=request_id,
+            policy_id=policy_id,
+            error_type=type(error).__name__,
+            latency_ms=round(elapsed, 2),
+            cold_start=_cold_start,
+        )
+
+        return {
+            "ok": False,
+            "error": "internal_error",
+            "retryable": False,
+            "request_id": request_id,
+        }
+
+    finally:
         _cold_start = False
-
-        return response(
-            500,
-            {
-                "error": "internal_server_error",
-            },
-            lambda_request_id,
-        )

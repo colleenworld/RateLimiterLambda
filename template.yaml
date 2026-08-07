@@ -51,19 +51,16 @@ Parameters:
 Resources:
 
   #########################################
-  # API Gateway
+  # Configuration (DynamoDb)
   #########################################
 
-  GatewayStack:
+  ConfigurationStack:
     Type: AWS::Serverless::Application
     Properties:
-      Location: ./stacks/gateway.yaml
-
+      Location: ./stacks/configuration.yaml
       Parameters:
         Environment: !Ref Environment
         ProjectName: !Ref ProjectName
-        LogRetentionDays: !Ref ApiLogRetentionDays
-        LambdaFunctionArn: !GetAtt LambdaStack.Outputs.LambdaFunctionArn
 
   #########################################
   # Network Infrastructure
@@ -115,6 +112,8 @@ Resources:
         CacheName: !GetAtt ValkeyCacheStack.Outputs.CacheName
         ValKeyUserName: !Sub "${Environment}${ProjectName}valkeyuser"
         ValKeyUserArn: !GetAtt ValkeyCacheStack.Outputs.UserArn
+        PolicyTableName: !GetAtt ConfigurationStack.Outputs.PolicyTableName
+        PolicyTableArn: !GetAtt ConfigurationStack.Outputs.PolicyTableArn
         Capacity: !Ref Capacity
         RefillRate: !Ref RefillRate
         MemorySize: !Ref MemorySize

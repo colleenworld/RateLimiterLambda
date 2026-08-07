@@ -57,10 +57,10 @@ def check_valkey(host: str):
 
         return result
 
-    def check_script(client):
-        script = client.register_script(
-            "return {1, 42}"
-        )
+def check_script(client):
+    script = client.register_script(
+        "return {1, 42}"
+    )
 
-        result = script()
-        return result == [1, 42]
+    result = script()
+    return result == [1, 42]

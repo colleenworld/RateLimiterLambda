@@ -45,6 +45,12 @@ Parameters:
   PrivateSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
 
+  PolicyTableName:
+    Type: String
+
+  PolicyTableArn:
+    Type: String
+
   ReservedConcurrency:
     Type: Number
     Default: 0
@@ -110,6 +116,25 @@ Resources:
                   - !Ref CacheArn
                   - !Ref ValKeyUserArn
 
+        - PolicyName: XrayTelemetryAuth
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource: "*"
+
+        - PolicyName: RateLimitPolicyRead
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !Ref PolicyTableArn
+
   #########################################
   # Lambda Function
   #########################################
@@ -129,6 +154,7 @@ Resources:
         - x86_64
       MemorySize: 512
       Timeout: 30
+      Tracing: Active
       Role:
         !GetAtt PaymentDemoLambdaExecutionRole.Arn
       Environment:
@@ -139,6 +165,7 @@ Resources:
           CACHE_NAME: !Ref CacheName
           ELASTICACHE_HOST: !Ref CacheEndpoint
           ENVIRONMENT: !Ref Environment
+          POLICY_TABLE_NAME: !Ref PolicyTableName
       VpcConfig:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroupId
