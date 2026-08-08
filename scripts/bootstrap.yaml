@@ -1,0 +1,471 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Bootstrap resources for deploying the Payment Demo application
+  from GitHub Actions using OIDC.
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: payment-demo
+
+  ApplicationStackName:
+    Type: String
+    Default: paymentDemoStack
+
+  GitHubRepositoryOwner:
+    Type: String
+    Description: GitHub user or organization that owns the repository
+
+  GitHubRepository:
+    Type: String
+    Default: ratelimiter
+
+  GitHubBranch:
+    Type: String
+    Default: main
+
+  CreateGitHubOidcProvider:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  ExistingGitHubOidcProviderArn:
+    Type: String
+    Default: ""
+
+Conditions:
+
+  CreateOidcProvider:
+    !Equals
+      - !Ref CreateGitHubOidcProvider
+      - "true"
+
+Resources:
+
+  #########################################################
+  # SAM deployment artifacts
+  #########################################################
+
+  SamArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+      VersioningConfiguration:
+        Status: Enabled
+
+  #########################################################
+  # GitHub OIDC provider
+  #
+  # This is account-wide, so create it only if the account
+  # does not already have one.
+  #########################################################
+
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidcProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  #########################################################
+  # CloudFormation execution role
+  #########################################################
+
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-cloudformation-execution"
+
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      Policies:
+
+        ###################################################
+        # Nested CloudFormation / SAM applications
+        ###################################################
+
+        - PolicyName: CloudFormation
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                Resource: "*"
+
+        ###################################################
+        # SAM artifact access
+        ###################################################
+
+        - PolicyName: SamArtifacts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt SamArtifactBucket.Arn
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !Sub "${SamArtifactBucket.Arn}/*"
+
+        ###################################################
+        # Networking
+        ###################################################
+
+        - PolicyName: Networking
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateVpc
+                  - ec2:DeleteVpc
+                  - ec2:DescribeVpcs
+                  - ec2:ModifyVpcAttribute
+
+                  - ec2:CreateSubnet
+                  - ec2:DeleteSubnet
+                  - ec2:DescribeSubnets
+                  - ec2:ModifySubnetAttribute
+
+                  - ec2:CreateRouteTable
+                  - ec2:DeleteRouteTable
+                  - ec2:DescribeRouteTables
+                  - ec2:AssociateRouteTable
+                  - ec2:DisassociateRouteTable
+
+                  - ec2:CreateSecurityGroup
+                  - ec2:DeleteSecurityGroup
+                  - ec2:DescribeSecurityGroups
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:RevokeSecurityGroupIngress
+                  - ec2:AuthorizeSecurityGroupEgress
+                  - ec2:RevokeSecurityGroupEgress
+
+                  - ec2:CreateVpcEndpoint
+                  - ec2:DeleteVpcEndpoints
+                  - ec2:DescribeVpcEndpoints
+
+                  - ec2:CreateTags
+                  - ec2:DeleteTags
+                  - ec2:DescribeTags
+
+                  - ec2:DescribeAvailabilityZones
+                Resource: "*"
+
+        ###################################################
+        # ElastiCache / Valkey
+        ###################################################
+
+        - PolicyName: ElastiCache
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticache:CreateServerlessCache
+                  - elasticache:ModifyServerlessCache
+                  - elasticache:DeleteServerlessCache
+                  - elasticache:DescribeServerlessCaches
+
+                  - elasticache:CreateUser
+                  - elasticache:ModifyUser
+                  - elasticache:DeleteUser
+                  - elasticache:DescribeUsers
+
+                  - elasticache:CreateUserGroup
+                  - elasticache:ModifyUserGroup
+                  - elasticache:DeleteUserGroup
+                  - elasticache:DescribeUserGroups
+
+                  - elasticache:AddTagsToResource
+                  - elasticache:RemoveTagsFromResource
+                  - elasticache:ListTagsForResource
+                Resource: "*"
+
+        ###################################################
+        # Lambda
+        ###################################################
+
+        - PolicyName: Lambda
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:CreateFunction
+                  - lambda:UpdateFunctionCode
+                  - lambda:UpdateFunctionConfiguration
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                  - lambda:TagResource
+                  - lambda:UntagResource
+                  - lambda:PutFunctionConcurrency
+                  - lambda:DeleteFunctionConcurrency
+                Resource: "*"
+
+        ###################################################
+        # Application IAM roles
+        ###################################################
+
+        - PolicyName: ApplicationIam
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:ListRolePolicies
+                  - iam:ListAttachedRolePolicies
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PassRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*${ProjectName}*"
+
+        ###################################################
+        # DynamoDB configuration
+        ###################################################
+
+        - PolicyName: DynamoDb
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:CreateTable
+                  - dynamodb:UpdateTable
+                  - dynamodb:DeleteTable
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeContinuousBackups
+                  - dynamodb:UpdateContinuousBackups
+                  - dynamodb:TagResource
+                  - dynamodb:UntagResource
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/*${ProjectName}*"
+
+        ###################################################
+        # CloudWatch / Logs / alarms / dashboards
+        ###################################################
+
+        - PolicyName: Monitoring
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DeleteLogGroup
+                  - logs:PutRetentionPolicy
+                  - logs:DescribeLogGroups
+                  - logs:TagResource
+                  - logs:UntagResource
+                Resource: "*"
+
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutDashboard
+                  - cloudwatch:DeleteDashboards
+                  - cloudwatch:GetDashboard
+                  - cloudwatch:PutMetricAlarm
+                  - cloudwatch:DeleteAlarms
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:TagResource
+                  - cloudwatch:UntagResource
+                Resource: "*"
+
+              - Effect: Allow
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:GetTopicAttributes
+                  - sns:SetTopicAttributes
+                  - sns:TagResource
+                  - sns:UntagResource
+                Resource: "*"
+
+  #########################################################
+  # GitHub deployment role
+  #########################################################
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-github-deploy"
+
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+
+            Principal:
+              Federated:
+                !If
+                  - CreateOidcProvider
+                  - !Ref GitHubOidcProvider
+                  - !Ref ExistingGitHubOidcProviderArn
+
+            Action:
+              - sts:AssumeRoleWithWebIdentity
+
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud:
+                  sts.amazonaws.com
+
+                token.actions.githubusercontent.com:sub:
+                  !Sub "repo:${GitHubRepositoryOwner}/${GitHubRepository}:ref:refs/heads/${GitHubBranch}"
+
+      Policies:
+
+        ###################################################
+        # Upload SAM artifacts
+        ###################################################
+
+        - PolicyName: SamArtifacts
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt SamArtifactBucket.Arn
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "${SamArtifactBucket.Arn}/*"
+
+        ###################################################
+        # Deploy root CloudFormation stack
+        ###################################################
+
+        - PolicyName: CloudFormationDeploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:DescribeStackResources
+                  - cloudformation:GetTemplate
+                  - cloudformation:GetTemplateSummary
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                Resource:
+                  - !Sub >-
+                    arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ApplicationStackName}/*
+
+              # SAM transforms such as Serverless and
+              # LanguageExtensions require CreateChangeSet.
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateChangeSet
+                Resource:
+                  - !Sub >-
+                    arn:${AWS::Partition}:cloudformation:${AWS::Region}:aws:transform/*
+
+        ###################################################
+        # Allow GitHub/SAM to tell CloudFormation which
+        # execution role it should assume.
+        ###################################################
+
+        - PolicyName: PassCloudFormationRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt CloudFormationExecutionRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService:
+                      cloudformation.amazonaws.com
+
+Outputs:
+
+  GitHubDeployRoleArn:
+    Description: Role ARN to use in GitHub Actions
+    Value: !GetAtt GitHubDeployRole.Arn
+
+  CloudFormationExecutionRoleArn:
+    Description: CloudFormation execution role used by SAM deploy
+    Value: !GetAtt CloudFormationExecutionRole.Arn
+
+  SamArtifactBucketName:
+    Description: S3 bucket for SAM deployment artifacts
+    Value: !Ref SamArtifactBucket
+
+  SamArtifactBucketArn:
+    Value: !GetAtt SamArtifactBucket.Arn
