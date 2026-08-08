@@ -1,7 +1,6 @@
 import json
 import logging
-from metric_logger import MetricLogger
-
+from classes.metric_logger import MetricLogger
 
 def test_emits_multiple_metrics(caplog):
     caplog.set_level(logging.INFO)

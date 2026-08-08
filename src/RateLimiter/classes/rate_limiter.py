@@ -11,14 +11,24 @@ from structures.rate_limit import (
     RateLimitRequest,
     RateLimitResponse
 )
+from classes.provider import get_client
+from classes.script_registry import ScriptRegistry
 
 class RateLimiter:
     def __init__(self):
+        client = get_client()
+        scripts = ScriptRegistry(client)
 
         self.algorithms = {
-            "token_bucket_v1": TokenBucketAlgorithm,
-            "fixed_window_v1": FixedWindowAlgorithm,
-            "sliding_window_v1": SlidingWindowAlgorithm
+            "token_bucket_v1": TokenBucketAlgorithm(
+                scripts.get("token_bucket_v1")
+            ),
+            "fixed_window_v1": FixedWindowAlgorithm(
+                scripts.get("fixed_window_v1")
+            ),
+            "sliding_window_v1": SlidingWindowAlgorithm(
+                scripts.get("sliding_window_v1")
+            ),
         }
 
     def allow(self, request: RateLimitRequest) -> RateLimitResponse:

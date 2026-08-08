@@ -1,6 +1,5 @@
 from unittest.mock import Mock, patch
-from provider import Provider
-
+from classes.provider import Provider
 
 def setup_provider_env(monkeypatch):
     monkeypatch.setenv(
@@ -25,7 +24,7 @@ def test_get_credentials_generates_token(monkeypatch):
 
     setup_provider_env(monkeypatch)
 
-    with patch("provider.RequestSigner") as signer_class:
+    with patch("classes.provider.RequestSigner") as signer_class:
 
         signer = Mock()
 
@@ -49,7 +48,7 @@ def test_signer_called_with_elasticache_connect(monkeypatch):
 
     setup_provider_env(monkeypatch)
 
-    with patch("provider.RequestSigner") as signer_class:
+    with patch("classes.provider.RequestSigner") as signer_class:
 
         signer = Mock()
 
@@ -72,7 +71,7 @@ def test_credentials_are_cached(monkeypatch):
 
     setup_provider_env(monkeypatch)
 
-    with patch("provider.RequestSigner") as signer_class:
+    with patch("classes.provider.RequestSigner") as signer_class:
 
         signer = Mock()
 

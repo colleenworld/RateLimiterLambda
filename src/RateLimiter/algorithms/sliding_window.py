@@ -10,10 +10,14 @@ class SlidingWindowAlgorithm:
     name = "sliding_window_v1"
     script_file = "sliding_window_v1.lua"
 
-    def __init__(self, scripts):
-        self.script = scripts.load(self.script_file)
+    def __init__(self, script):
+        self.script = script
 
     def allow(self, request: RateLimitRequest) -> RateLimitResponse:
+        if not request.request_id:
+            raise ConfigurationError(
+                "request_id is required for sliding_window_v1"
+            )
         policy = request.policy
 
         if policy.capacity <= 0:

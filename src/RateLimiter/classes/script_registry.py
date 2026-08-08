@@ -1,6 +1,6 @@
+from classes.errors import ConfigurationError
 from pathlib import Path
-from errors import ConfigurationError
-SCRIPT_DIR = Path(__file__).parent / "lua"
+SCRIPT_DIR = Path(__file__).resolve().parent.parent / "lua"
 
 SCRIPT_FILES = {
     "token_bucket_v1": "token_bucket_v1.lua",

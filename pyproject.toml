@@ -23,5 +23,5 @@ dev = [
 pythonpath = ["src/RateLimiter"]
 testpaths = ["tests"]
 markers = [
-    "integration: tests requiring external AWS resources"
+    "integration: tests requiring external infrastructure"
 ]

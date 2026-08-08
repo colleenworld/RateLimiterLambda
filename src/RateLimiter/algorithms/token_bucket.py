@@ -17,9 +17,9 @@ class TokenBucketAlgorithm:
                 f"rate-limit:{self.name}:{policy.policy_id}"
             ],
             args=[
+                time.time(),
                 policy.capacity,
                 policy.refill_rate,
-                time.time(),
                 1,
             ],
         )

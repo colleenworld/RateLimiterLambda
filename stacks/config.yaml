@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Customer rate-limit configuration
+Description: Rate-limit policy configuration for the Payment Demo
 
 Parameters:
   Environment:
@@ -9,26 +9,42 @@ Parameters:
     Type: String
 
 Resources:
+
+  #########################################################
+  # Rate-limit policies
+  #########################################################
+
   RateLimitPolicyTable:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName: !Sub "${Environment}-${ProjectName}-rate-limit-policies"
+
       BillingMode: PAY_PER_REQUEST
 
       AttributeDefinitions:
-        - AttributeName: customer_id
+        - AttributeName: policy_id
           AttributeType: S
 
       KeySchema:
-        - AttributeName: customer_id
+        - AttributeName: policy_id
           KeyType: HASH
 
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
 
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+        - Key: Project
+          Value: !Ref ProjectName
+
 Outputs:
+
   PolicyTableName:
+    Description: DynamoDB table containing rate-limit policies
     Value: !Ref RateLimitPolicyTable
 
   PolicyTableArn:
+    Description: ARN of the rate-limit policy table
     Value: !GetAtt RateLimitPolicyTable.Arn

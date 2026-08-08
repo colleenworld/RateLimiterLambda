@@ -1,5 +1,4 @@
 import time
-
 from classes.errors import ConfigurationError
 from structures.rate_limit import (
     RateLimitRequest,
@@ -10,8 +9,8 @@ class FixedWindowAlgorithm:
     name = "fixed_window_v1"
     script_file = "fixed_window_v1.lua"
 
-    def __init__(self, scripts):
-        self.script = scripts.load(self.script_file)
+    def __init__(self, script):
+        self.script = script
 
     def allow(self, request: RateLimitRequest) -> RateLimitResponse:
         policy = request.policy
