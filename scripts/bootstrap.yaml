@@ -17,7 +17,15 @@ Parameters:
     Type: String
     Description: GitHub user or organization that owns the repository
 
+  GitHubRepositoryOwnerId:
+    Type: String
+    Description: GitHub user id
+
   GitHubRepository:
+    Type: String
+    Default: ratelimiter
+
+  GitHubRepositoryId:
     Type: String
     Default: ratelimiter
 
@@ -366,10 +374,10 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud:
-                  sts.amazonaws.com
-
+                    sts.amazonaws.com
                 token.actions.githubusercontent.com:sub:
-                  !Sub "repo:colleenworld@OWNER_ID/ratelimiter@REPO_ID:ref:refs/heads/main"
+                    !Sub >-
+                      repo:${GitHubRepositoryOwner}@${GitHubRepositoryOwnerId}/${GitHubRepository}@${GitHubRepositoryId}:ref:refs/heads/${GitHubBranch}
       Policies:
 
         ###################################################
