@@ -369,8 +369,7 @@ Resources:
                   sts.amazonaws.com
 
                 token.actions.githubusercontent.com:sub:
-                  !Sub "repo:${GitHubRepositoryOwner}/${GitHubRepository}:ref:refs/heads/${GitHubBranch}"
-
+                  !Sub "repo:colleenworld@OWNER_ID/ratelimiter@REPO_ID:ref:refs/heads/main"
       Policies:
 
         ###################################################

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-AWS_REGION="${AWS_REGION:-us-east-1}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
 BOOTSTRAP_STACK_NAME="${BOOTSTRAP_STACK_NAME:-payment-demo-bootstrap}"
 APPLICATION_STACK_NAME="${APPLICATION_STACK_NAME:-paymentDemoStack}"
 GITHUB_BRANCH="${GITHUB_BRANCH:-main}"
@@ -30,6 +30,54 @@ fi
 GITHUB_REPOSITORY_FULL="${GITHUB_OWNER}/${GITHUB_REPOSITORY}"
 
 ###########################################################
+# Verify GitHub CLI
+###########################################################
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "GitHub CLI (gh) is required for bootstrap."
+    echo
+    echo "Install it from:"
+    echo "  https://cli.github.com/"
+    exit 1
+fi
+
+if ! gh auth status >/dev/null 2>&1; then
+    echo "GitHub CLI is not authenticated."
+    echo
+    echo "Run:"
+    echo "  gh auth login"
+    exit 1
+fi
+
+###########################################################
+# Resolve immutable GitHub IDs
+###########################################################
+
+echo "Resolving GitHub repository identity..."
+
+GITHUB_OWNER_ID="$(
+    gh api \
+        "users/$GITHUB_OWNER" \
+        --jq '.id'
+)"
+
+GITHUB_REPOSITORY_ID="$(
+    gh api \
+        "repos/$GITHUB_OWNER/$GITHUB_REPOSITORY" \
+        --jq '.id'
+)"
+
+if [[ -z "$GITHUB_OWNER_ID" ]]; then
+    echo "Unable to determine GitHub owner ID."
+    exit 1
+fi
+
+if [[ -z "$GITHUB_REPOSITORY_ID" ]]; then
+    echo "Unable to determine GitHub repository ID."
+    exit 1
+fi
+
+###########################################################
 # Detect GitHub OIDC provider
 ###########################################################
 
@@ -37,7 +85,8 @@ echo "Checking for existing GitHub OIDC provider..."
 
 OIDC_PROVIDER_ARN="$(
     aws iam list-open-id-connect-providers \
-        --query "OpenIDConnectProviderList[?ends_with(Arn, 'token.actions.githubusercontent.com')].Arn | [0]" \
+        --query \
+        "OpenIDConnectProviderList[?ends_with(Arn, 'token.actions.githubusercontent.com')].Arn | [0]" \
         --output text
 )"
 
@@ -61,15 +110,17 @@ fi
 echo
 echo "Bootstrap configuration"
 echo "-----------------------"
-echo "AWS region:          $AWS_REGION"
-echo "Bootstrap stack:     $BOOTSTRAP_STACK_NAME"
-echo "Application stack:   $APPLICATION_STACK_NAME"
-echo "GitHub repository:   $GITHUB_REPOSITORY_FULL"
-echo "GitHub branch:       $GITHUB_BRANCH"
-echo "Create OIDC:         $CREATE_OIDC_PROVIDER"
+echo "AWS region:           $AWS_REGION"
+echo "Bootstrap stack:      $BOOTSTRAP_STACK_NAME"
+echo "Application stack:    $APPLICATION_STACK_NAME"
+echo "GitHub repository:    $GITHUB_REPOSITORY_FULL"
+echo "GitHub owner ID:      $GITHUB_OWNER_ID"
+echo "GitHub repository ID: $GITHUB_REPOSITORY_ID"
+echo "GitHub branch:        $GITHUB_BRANCH"
+echo "Create OIDC:          $CREATE_OIDC_PROVIDER"
 
 if [[ -n "$OIDC_PROVIDER_ARN" ]]; then
-    echo "OIDC provider ARN:   $OIDC_PROVIDER_ARN"
+    echo "OIDC provider ARN:    $OIDC_PROVIDER_ARN"
 fi
 
 echo
@@ -86,13 +137,15 @@ aws cloudformation deploy \
     --parameter-overrides \
         GitHubRepositoryOwner="$GITHUB_OWNER" \
         GitHubRepository="$GITHUB_REPOSITORY" \
+        GitHubRepositoryOwnerId="$GITHUB_OWNER_ID" \
+        GitHubRepositoryId="$GITHUB_REPOSITORY_ID" \
         GitHubBranch="$GITHUB_BRANCH" \
         ApplicationStackName="$APPLICATION_STACK_NAME" \
         CreateGitHubOidcProvider="$CREATE_OIDC_PROVIDER" \
         ExistingGitHubOidcProviderArn="$OIDC_PROVIDER_ARN"
 
 ###########################################################
-# Read stack outputs
+# Read bootstrap outputs
 ###########################################################
 
 echo
@@ -102,7 +155,8 @@ GITHUB_DEPLOY_ROLE_ARN="$(
     aws cloudformation describe-stacks \
         --stack-name "$BOOTSTRAP_STACK_NAME" \
         --region "$AWS_REGION" \
-        --query "Stacks[0].Outputs[?OutputKey=='GitHubDeployRoleArn'].OutputValue | [0]" \
+        --query \
+        "Stacks[0].Outputs[?OutputKey=='GitHubDeployRoleArn'].OutputValue | [0]" \
         --output text
 )"
 
@@ -110,7 +164,8 @@ CLOUDFORMATION_EXECUTION_ROLE_ARN="$(
     aws cloudformation describe-stacks \
         --stack-name "$BOOTSTRAP_STACK_NAME" \
         --region "$AWS_REGION" \
-        --query "Stacks[0].Outputs[?OutputKey=='CloudFormationExecutionRoleArn'].OutputValue | [0]" \
+        --query \
+        "Stacks[0].Outputs[?OutputKey=='CloudFormationExecutionRoleArn'].OutputValue | [0]" \
         --output text
 )"
 
@@ -118,7 +173,8 @@ SAM_ARTIFACT_BUCKET="$(
     aws cloudformation describe-stacks \
         --stack-name "$BOOTSTRAP_STACK_NAME" \
         --region "$AWS_REGION" \
-        --query "Stacks[0].Outputs[?OutputKey=='SamArtifactBucketName'].OutputValue | [0]" \
+        --query \
+        "Stacks[0].Outputs[?OutputKey=='SamArtifactBucketName'].OutputValue | [0]" \
         --output text
 )"
 
@@ -131,7 +187,8 @@ if [[ -z "$GITHUB_DEPLOY_ROLE_ARN" || "$GITHUB_DEPLOY_ROLE_ARN" == "None" ]]; th
     exit 1
 fi
 
-if [[ -z "$CLOUDFORMATION_EXECUTION_ROLE_ARN" || "$CLOUDFORMATION_EXECUTION_ROLE_ARN" == "None" ]]; then
+if [[ -z "$CLOUDFORMATION_EXECUTION_ROLE_ARN" || \
+      "$CLOUDFORMATION_EXECUTION_ROLE_ARN" == "None" ]]; then
     echo "Unable to read CloudFormationExecutionRoleArn from bootstrap stack."
     exit 1
 fi
@@ -144,9 +201,9 @@ fi
 echo
 echo "Bootstrap outputs"
 echo "-----------------"
-echo "AWS deploy role:                $GITHUB_DEPLOY_ROLE_ARN"
-echo "CloudFormation execution role:  $CLOUDFORMATION_EXECUTION_ROLE_ARN"
-echo "SAM artifact bucket:            $SAM_ARTIFACT_BUCKET"
+echo "AWS deploy role:               $GITHUB_DEPLOY_ROLE_ARN"
+echo "CloudFormation execution role: $CLOUDFORMATION_EXECUTION_ROLE_ARN"
+echo "SAM artifact bucket:           $SAM_ARTIFACT_BUCKET"
 
 ###########################################################
 # Configure GitHub repository variables
@@ -154,34 +211,6 @@ echo "SAM artifact bucket:            $SAM_ARTIFACT_BUCKET"
 
 echo
 echo "Configuring GitHub repository variables..."
-
-if ! command -v gh >/dev/null 2>&1; then
-    echo
-    echo "GitHub CLI (gh) is not installed."
-    echo "Skipping automatic GitHub variable configuration."
-    echo
-    echo "Set these repository variables manually:"
-    echo
-    echo "  AWS_REGION=$AWS_REGION"
-    echo "  AWS_DEPLOY_ROLE_ARN=$GITHUB_DEPLOY_ROLE_ARN"
-    echo "  CLOUDFORMATION_EXECUTION_ROLE_ARN=$CLOUDFORMATION_EXECUTION_ROLE_ARN"
-    echo "  SAM_ARTIFACT_BUCKET=$SAM_ARTIFACT_BUCKET"
-    echo "  APPLICATION_STACK_NAME=$APPLICATION_STACK_NAME"
-
-    exit 0
-fi
-
-if ! gh auth status >/dev/null 2>&1; then
-    echo
-    echo "GitHub CLI is installed but not authenticated."
-    echo
-    echo "Run:"
-    echo "  gh auth login"
-    echo
-    echo "Then rerun this script to configure repository variables."
-
-    exit 0
-fi
 
 gh variable set \
     AWS_REGION \
@@ -209,20 +238,27 @@ gh variable set \
     --body "$APPLICATION_STACK_NAME"
 
 ###########################################################
+# Verify GitHub variables
+###########################################################
+
+echo
+echo "GitHub repository variables:"
+echo
+
+gh variable list \
+    --repo "$GITHUB_REPOSITORY_FULL"
+
+###########################################################
 # Complete
 ###########################################################
 
 echo
-echo "GitHub repository variables configured successfully."
+echo "Bootstrap complete."
 echo
 echo "Repository:"
 echo "  $GITHUB_REPOSITORY_FULL"
 echo
-echo "Variables:"
-echo "  AWS_REGION"
-echo "  AWS_DEPLOY_ROLE_ARN"
-echo "  CLOUDFORMATION_EXECUTION_ROLE_ARN"
-echo "  SAM_ARTIFACT_BUCKET"
-echo "  APPLICATION_STACK_NAME"
+echo "GitHub OIDC subject configured for:"
 echo
-echo "Bootstrap complete."
+echo "  repo:${GITHUB_OWNER}@${GITHUB_OWNER_ID}/${GITHUB_REPOSITORY}@${GITHUB_REPOSITORY_ID}:ref:refs/heads/${GITHUB_BRANCH}"
+echo
