@@ -34,11 +34,34 @@ jobs:
       - name: Set up AWS SAM
         uses: aws-actions/setup-sam@v3
 
+      - name: Validate deployment configuration
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          APPLICATION_STACK_NAME: ${{ vars.APPLICATION_STACK_NAME }}
+          SAM_ARTIFACT_BUCKET: ${{ vars.SAM_ARTIFACT_BUCKET }}
+          CLOUDFORMATION_EXECUTION_ROLE_ARN: ${{ vars.CLOUDFORMATION_EXECUTION_ROLE_ARN }}
+        run: |
+          for var in \
+            AWS_DEPLOY_ROLE_ARN \
+            AWS_REGION \
+            APPLICATION_STACK_NAME \
+            SAM_ARTIFACT_BUCKET \
+            CLOUDFORMATION_EXECUTION_ROLE_ARN
+          do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var repository variable is not configured"
+              exit 1
+            fi
+          done
+
+          echo "Deployment configuration is present"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-west-2
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
