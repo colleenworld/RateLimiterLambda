@@ -127,20 +127,13 @@ def test_disabled_policy_does_not_call_limiter(
         "request_id": "request-123",
     }
 
-
-def test_none_policy_is_treated_as_disabled(
+def test_missing_policy_is_configuration_failure(
     context,
 ):
-    limiter = Mock()
-
-    with (
-        patch(
-            "lambda_fn.get_policy",
-            return_value=None,
-        ),
-        patch(
-            "lambda_fn.get_limiter",
-            return_value=limiter,
+    with patch(
+        "lambda_fn.get_policy",
+        side_effect=ConfigurationError(
+            "Rate-limit policy not found: missing-policy"
         ),
     ):
         response = lambda_fn.handler(
@@ -150,11 +143,10 @@ def test_none_policy_is_treated_as_disabled(
             context,
         )
 
-    limiter.allow.assert_not_called()
-
     assert response == {
         "ok": False,
-        "error": "rate_limiting_disabled",
+        "error": "configuration_failure",
+        "retryable": False,
         "request_id": "request-123",
     }
 
