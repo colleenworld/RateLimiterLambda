@@ -2,9 +2,51 @@
 
 ## Status
 
-Accepted
+Superseded by ADR 008: Use AWS Lambda for Internal Rate-Limit Execution
 
 ## Context
+
+The original implementation exposed the rate limiter as an HTTP service using Amazon API Gateway in front of AWS Lambda.
+
+This provided a managed HTTP boundary and allowed external callers to invoke the rate limiter over HTTPS.
+
+As the architecture evolved, the rate limiter became an internal infrastructure component intended to be invoked by other workloads running within AWS. A public HTTP API was therefore no longer required.
+
+The API Gateway layer was removed to reduce unnecessary infrastructure, latency, cost, monitoring surface, and deployment complexity.
+
+The decision to use AWS Lambda as the initial compute platform remains valid and is documented in ADR 008.
+
+## Decision
+
+This decision is superseded.
+
+The current architecture no longer uses Amazon API Gateway as the invocation boundary for the rate limiter.
+
+See ADR 008 for the current compute and invocation architecture.
+
+## Consequences
+
+The following consequences of the original decision no longer apply:
+
+- API Gateway access logging;
+- API Gateway request IDs;
+- API Gateway HTTP status mapping;
+- API Gateway metrics and alarms;
+- Lambda proxy integration;
+- an externally exposed HTTP endpoint.
+
+The following parts of the original decision remain relevant and are carried forward into ADR 008:
+
+- stateless Lambda compute;
+- horizontal scaling through Lambda concurrency;
+- VPC connectivity to Valkey;
+- independent scaling of compute and shared state;
+- monitoring of Lambda concurrency, duration, errors, and throttles;
+- the possibility of moving to ECS/Fargate if production workload characteristics favor long-running compute.
+
+## Notes
+
+This ADR is retained to document the architectural evolution of the service rather than being rewritten as though API Gateway had never been selected. Context
 
 The rate limiter is exposed as an HTTP service that determines whether a request for a customer should be allowed according to a token-bucket policy.
 
