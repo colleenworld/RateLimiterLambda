@@ -67,7 +67,7 @@ def handler(event, context):
 
         policy = get_policy(policy_id)
 
-        if not policy or not policy.enabled:
+        if not policy.enabled:
             return {
                 "ok": False,
                 "error": "rate_limiting_disabled",
