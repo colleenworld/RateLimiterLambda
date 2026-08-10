@@ -515,21 +515,35 @@ A bootstrap script is provided to configure the AWS resources and GitHub reposit
 
 ### Prerequisites
 
-Install and authenticate the AWS CLI.
+The bootstrap script should be run from a clone of the GitHub repository with an `origin` remote pointing to GitHub.
 
-Verify access with:
+The following tools are required:
+
+- AWS CLI
+- GitHub CLI (`gh`)
+- Git
+
+The AWS CLI must be authenticated with an identity that has sufficient permissions to create the bootstrap CloudFormation stack and its IAM resources.
+
+Verify AWS access with:
 
 ```bash
 aws sts get-caller-identity
 ```
 
-Install the GitHub CLI and authenticate:
+Authenticate the GitHub CLI with:
 
 ```bash
 gh auth login
 ```
 
-The bootstrap script derives the GitHub repository owner and repository name from the local Git `origin`, so no repository owner is hard-coded into the project.
+Verify GitHub authentication with:
+
+```bash
+gh auth status
+```
+
+The bootstrap script derives the GitHub repository owner and repository name from the local Git `origin`, so no GitHub organization or repository is hard-coded into the project.
 
 ### Run the Bootstrap
 
@@ -550,13 +564,14 @@ Replace `us-west-2` with the AWS region in which you want to deploy.
 The bootstrap process:
 
 1. Determines the GitHub repository owner and repository from `origin`.
-2. Checks whether the AWS account already has the GitHub Actions OIDC provider.
-3. Reuses the provider if it exists or creates it if necessary.
-4. Creates the GitHub deployment IAM role.
-5. Creates the CloudFormation execution role.
-6. Creates/configures the SAM deployment artifact resources.
-7. Reads the resulting CloudFormation outputs.
-8. Configures the GitHub repository variables used by the deployment workflow.
+2. Resolves the immutable GitHub owner and repository numeric IDs.
+3. Checks whether the AWS account already has the GitHub Actions OIDC provider.
+4. Reuses the provider if it exists or creates it if necessary.
+5. Creates a GitHub deployment IAM role restricted to the repository and branch.
+6. Creates the CloudFormation execution role.
+7. Creates/configures the SAM deployment artifact resources.
+8. Reads the resulting CloudFormation outputs.
+9. Configures the GitHub repository variables used by the deployment workflow.
 
 The following GitHub repository variables are configured automatically:
 
@@ -587,6 +602,44 @@ is already registered with IAM, the existing provider is reused.
 Otherwise, the bootstrap CloudFormation stack creates it.
 
 This makes the bootstrap process suitable for both new AWS accounts and accounts already using GitHub Actions OIDC.
+
+---
+
+### GitHub OIDC Trust
+
+The bootstrap process configures the GitHub deployment role to trust the specific GitHub repository and deployment branch.
+
+The bootstrap script resolves both the repository names and their immutable GitHub numeric IDs using the GitHub CLI. The resulting OIDC subject is restricted to a value of the form:
+
+```text
+repo:<owner>@<owner-id>/<repository>@<repository-id>:ref:refs/heads/<branch>
+```
+
+For example:
+
+```text
+repo:example-org@12345678/rate-limiter@987654321:ref:refs/heads/main
+```
+
+The IAM trust policy also requires the OIDC audience:
+
+```text
+sts.amazonaws.com
+```
+
+Together, these conditions restrict role assumption to the configured GitHub repository and branch.
+
+No AWS access keys are stored in GitHub. During deployment, GitHub Actions requests an OIDC token and exchanges it for temporary AWS credentials by assuming the deployment role.
+
+---
+
+## Architecture Decision Records
+
+The project maintains Architecture Decision Records (ADRs) for significant design and deployment decisions. The records document the context, selected approach, consequences, and alternatives considered.
+
+The ADRs include decisions covering shared Valkey state, atomic Lua operations, IAM authentication, the Lambda/API Gateway compute model, and the project's additional architecture and deployment choices.
+
+See the ADR directory in the repository for the complete set of ADRs (001–007).
 
 ---
 
