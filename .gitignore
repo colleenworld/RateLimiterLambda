@@ -1,5 +1,6 @@
 /.aws-sam/
 /.venv/
+/.idea/*
 /.idea/
 /py.txt
 /__pycache__/
