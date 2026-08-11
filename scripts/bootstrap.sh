@@ -103,6 +103,20 @@ else
     echo "  $OIDC_PROVIDER_ARN"
 fi
 
+OIDC_SUB_CLAIM_PREFIX="$(
+    gh api \
+        "repos/$GITHUB_OWNER/$GITHUB_REPOSITORY/actions/oidc/customization/sub" \
+        --jq '.sub_claim_prefix'
+)"
+
+if [[ -z "$OIDC_SUB_CLAIM_PREFIX" || "$OIDC_SUB_CLAIM_PREFIX" == "null" ]]; then
+    echo "Unable to determine GitHub OIDC subject prefix."
+    exit 1
+fi
+
+echo "GitHub OIDC subject prefix:"
+echo "  $OIDC_SUB_CLAIM_PREFIX"
+
 ###########################################################
 # Show configuration
 ###########################################################
@@ -118,6 +132,7 @@ echo "GitHub owner ID:      $GITHUB_OWNER_ID"
 echo "GitHub repository ID: $GITHUB_REPOSITORY_ID"
 echo "GitHub branch:        $GITHUB_BRANCH"
 echo "Create OIDC:          $CREATE_OIDC_PROVIDER"
+echo "Prefix OIDC subclaim: $OIDC_SUB_CLAIM_PREFIX"
 
 if [[ -n "$OIDC_PROVIDER_ARN" ]]; then
     echo "OIDC provider ARN:    $OIDC_PROVIDER_ARN"
@@ -142,7 +157,8 @@ aws cloudformation deploy \
         GitHubBranch="$GITHUB_BRANCH" \
         ApplicationStackName="$APPLICATION_STACK_NAME" \
         CreateGitHubOidcProvider="$CREATE_OIDC_PROVIDER" \
-        ExistingGitHubOidcProviderArn="$OIDC_PROVIDER_ARN"
+        ExistingGitHubOidcProviderArn="$OIDC_PROVIDER_ARN"\
+        GitHubOidcSubjectPrefix="$OIDC_SUB_CLAIM_PREFIX"
 
 ###########################################################
 # Read bootstrap outputs

@@ -44,6 +44,11 @@ Parameters:
     Type: String
     Default: ""
 
+  GitHubOidcSubjectPrefix:
+    Type: String
+    Default: ""
+    Description: Immutable GitHub OIDC subject prefix for this repository
+
 Conditions:
 
   CreateOidcProvider:
@@ -376,8 +381,8 @@ Resources:
                 token.actions.githubusercontent.com:aud:
                     sts.amazonaws.com
                 token.actions.githubusercontent.com:sub:
-                    !Sub >-
-                      repo:${GitHubRepositoryOwner}@${GitHubRepositoryOwnerId}/${GitHubRepository}@${GitHubRepositoryId}:ref:refs/heads/${GitHubBranch}
+                  !Sub >-
+                  ${GitHubOidcSubjectPrefix}:ref:refs/heads/${GitHubBranch}
       Policies:
 
         ###################################################
