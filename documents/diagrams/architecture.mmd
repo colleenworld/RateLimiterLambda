@@ -1,0 +1,48 @@
+architecture-beta
+    service client(client)[Client]
+    service logs(logos:aws-cloudwatch)[Cloudwatch] in rl
+    service db(logos:aws-dynamodb)[Policies] in rl
+    group rl(api)[Rate limiter]
+    service valkey(logos:aws-elasticache)[Valkey] in rl
+    group lambda(api)[Lambda] in rl
+    service handler(logos:aws-lambda)[Handler] in lambda
+    group luas(api)[Luas] in lambda
+    service tokenbucket(api)[token bucket] in luas
+    service fixed(api)[fixed window] in luas
+    service sliding(api)[sliding window] in luas
+
+    junction tlj in lambda
+    junction tcj in lambda
+    junction trj in lambda
+    junction blj in lambda
+    junction bcj in lambda
+    junction brj in lambda
+
+    tcj:T -- B:trj
+    tlj:T -- B:tcj
+    bcj:T -- B:brj
+    blj:T -- B:bcj
+
+    handler:L -- R:tcj
+
+    blj:L -- R:fixed
+    bcj:L -- R:sliding
+    brj:L -- R:tokenbucket
+
+    fixed:L -- R:tlj
+    sliding:L -- R:tcj
+    tokenbucket:L -- R:trj
+
+    valkey:L -- R:bcj
+    logs:T -- B:handler
+    handler:T -- B:db
+
+    handler:L -- R:client
+
+    align column db handler logs
+    align column trj tcj tlj
+    align column tokenbucket sliding fixed
+    align column brj bcj blj
+    align row client handler tcj sliding bcj valkey
+    align row trj tokenbucket brj
+    align row tlj fixed blj

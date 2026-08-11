@@ -1,0 +1,66 @@
+sequenceDiagram
+    autonumber
+
+    actor Client
+    participant Lambda as AWS Lambda
+    participant Resolver as Policy Resolver
+    participant Cache as Local TTL Cache
+    participant DynamoDB as DynamoDB
+    participant Limiter as RateLimiter
+    participant Algorithm as Rate-Limit Algorithm
+    participant Registry as ScriptRegistry
+    participant Valkey as ElastiCache / Valkey
+    participant CloudWatch as CloudWatch
+
+    Client->>Lambda: Invoke { policy_id }
+
+    Lambda->>Lambda: Validate policy_id
+
+    alt policy_id missing
+        Lambda-->>Client: invalid_request
+    else policy_id present
+        Lambda->>Resolver: get_policy(policy_id)
+
+        Resolver->>Cache: Lookup policy_id
+
+        alt Policy cached
+            Cache-->>Resolver: RateLimitPolicy
+        else Cache miss
+            Resolver->>DynamoDB: GetItem(policy_id)
+            DynamoDB-->>Resolver: Policy record
+            Resolver->>Resolver: Build RateLimitPolicy
+            Resolver->>Cache: Cache policy
+        end
+
+        Resolver-->>Lambda: RateLimitPolicy
+
+        alt Policy disabled
+            Lambda-->>Client: rate_limiting_disabled
+        else Policy enabled
+            Lambda->>Limiter: allow(RateLimitRequest)
+
+            Limiter->>Limiter: Select policy.algorithm
+            Limiter->>Algorithm: allow(request)
+
+            Note over Algorithm,Valkey: Algorithm adapter validates policy<br/>and constructs KEYS / ARGV
+
+            Algorithm->>Valkey: Execute registered Lua script
+
+            Note over Valkey: Atomic state transition<br/>Token Bucket / Fixed Window / Sliding Window
+
+            Valkey-->>Algorithm: [allowed, remaining]
+            Algorithm-->>Limiter: RateLimitResponse
+            Limiter-->>Lambda: RateLimitResponse
+
+            Lambda->>CloudWatch: EMF metrics
+            Lambda->>CloudWatch: Structured log event
+
+            alt Request allowed
+                Lambda-->>Client: allowed=true, remaining
+            else Rate limit exceeded
+                Lambda-->>Client: allowed=false, remaining
+            end
+        end
+    end
+
+

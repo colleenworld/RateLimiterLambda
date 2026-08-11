@@ -1,0 +1,16 @@
+---
+config:
+  flowchart:
+    curve: natural
+---
+
+flowchart LR
+
+node1["client"]-->|request|node2["validae policy id"]
+node2 --> node3@{ shape: diamond, label: "resolve<br/>rate limit policy"}
+node3 -->|invalid| node4["generate error<br>response" ]
+node3 -->|valid| node5["make rate<br/>limit request" ]
+node4 -->node6["emit metrics and logs" ]
+node5 -->node7["generate response" ]
+node7 -->node6["emit metrics and logs" ]
+node6 -->|respond|node1

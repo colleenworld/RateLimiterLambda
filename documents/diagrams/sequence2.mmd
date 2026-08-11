@@ -1,0 +1,97 @@
+sequenceDiagram
+    autonumber
+
+    actor Client
+    participant Lambda as AWS Lambda Runtime
+    participant Handler as lambda_fn
+    participant Limiter as RateLimiter
+    participant Provider as Valkey Provider
+    participant Registry as ScriptRegistry
+    participant Valkey as ElastiCache / Valkey
+    participant Resolver as Policy Resolver
+    participant PolicyCache as Local TTL Cache
+    participant DynamoDB as DynamoDB
+
+    Client->>Lambda: Invoke function
+
+    alt Cold start
+        Lambda->>Handler: Initialize module
+
+        Note over Handler: _limiter = None<br/>_cold_start = true
+
+        Handler->>Resolver: get_policy(policy_id)
+        Resolver->>PolicyCache: Lookup policy_id
+
+        alt Policy cache miss
+            Resolver->>DynamoDB: GetItem(policy_id)
+            DynamoDB-->>Resolver: Policy record
+            Resolver->>PolicyCache: Store RateLimitPolicy
+        end
+
+        Resolver-->>Handler: RateLimitPolicy
+
+        Handler->>Handler: get_limiter()
+
+        alt Limiter not initialized
+            Handler->>Limiter: RateLimiter()
+
+            Limiter->>Provider: get_client()
+
+            Provider->>Provider: Resolve AWS credentials
+            Provider->>Provider: Generate/cache SigV4 auth token
+            Provider-->>Limiter: Valkey client
+
+            Limiter->>Registry: ScriptRegistry(client)
+
+            Limiter->>Registry: get(token_bucket_v1)
+            Registry->>Valkey: register_script(token_bucket_v1.lua)
+            Valkey-->>Registry: Registered script
+
+            Limiter->>Registry: get(fixed_window_v1)
+            Registry->>Valkey: register_script(fixed_window_v1.lua)
+            Valkey-->>Registry: Registered script
+
+            Limiter->>Registry: get(sliding_window_v1)
+            Registry->>Valkey: register_script(sliding_window_v1.lua)
+            Valkey-->>Registry: Registered script
+
+            Note over Limiter: Algorithm instances are wired<br/>to registered Lua callables
+
+            Limiter-->>Handler: Initialized RateLimiter
+            Handler->>Handler: Cache _limiter
+        end
+
+        Handler->>Limiter: allow(request)
+        Limiter->>Valkey: Execute selected Lua script
+        Valkey-->>Limiter: allowed, remaining
+        Limiter-->>Handler: RateLimitResponse
+
+        Handler->>Handler: _cold_start = false
+        Handler-->>Client: Decision
+
+    else Warm invocation
+        Lambda->>Handler: Reuse execution environment
+
+        Handler->>Resolver: get_policy(policy_id)
+        Resolver->>PolicyCache: Lookup policy_id
+
+        alt Policy still cached
+            PolicyCache-->>Resolver: RateLimitPolicy
+        else Policy cache expired
+            Resolver->>DynamoDB: GetItem(policy_id)
+            DynamoDB-->>Resolver: Policy record
+            Resolver->>PolicyCache: Refresh RateLimitPolicy
+        end
+
+        Resolver-->>Handler: RateLimitPolicy
+
+        Handler->>Handler: get_limiter()
+        Note over Handler,Limiter: Reuse cached RateLimiter,<br/>Valkey client, provider state,<br/>and registered Lua scripts
+
+        Handler->>Limiter: allow(request)
+        Limiter->>Valkey: Execute selected Lua script
+        Valkey-->>Limiter: allowed, remaining
+        Limiter-->>Handler: RateLimitResponse
+
+        Handler-->>Client: Decision
+    end

@@ -1,0 +1,47 @@
+---
+config:
+  flowchart:
+    curve: natural
+---
+
+flowchart TD
+
+    classDef Lua fill:#609,stroke:#fff,stroke-width:1px,color:#fff
+    style Atomic fill:#069,stroke:#fff,stroke-width:1px,color:#fff
+    style ElastiCache fill:#093,stroke:#fff,stroke-width:1px,color:#fff
+    style CloudWatch fill:#909,stroke:#fff,stroke-width:1px,color:#fff
+    style DynamoDb fill:#009,stroke:#fff,stroke-width:1px,color:#fff
+    style Handler fill:#c90,stroke:#000,stroke-width:1px,color:#000
+    style Luas stroke:#333,stroke-width:1px,fill:#fff;
+    style System stroke:#333,stroke-width:1px,fill:#fff;
+    style RateLimiter stroke:#333,stroke-width:1px,fill:#fff;
+
+    Client(Client)@{ curve: linear}--> Handler
+    subgraph System[" "]
+    DynamoDb@{ shape: cyl, label: "AWS<br/>DynamoDb" }
+    CloudWatch@{ shape: datastore, label: "AWS CloudWatch"}
+    subgraph RateLimiter["AWS Lambda"]
+    Handler@{ shape: hex, label: "Handler<br/>function"}
+    subgraph Luas[" "]
+    TokenBucket:::Lua@{ shape: fr-rect, label: "Token bucket<br/>lua"}
+    FixedWindow:::Lua@{ shape: fr-rect, label: "Fixed window<br/>lua"}
+    SlidingWindow:::Lua@{ shape: fr-rect, label: "Sliding window<br/>lua"}
+    end
+    Atomic(["Lua / Valkey<br/>atomic operation"])
+    end
+    ElastiCache@{ shape: lin-cyl, "ElastiCache"}
+    end
+
+
+    DynamoDb--. rate-limit policies .--> Handler
+
+    Handler --. Logs and metrics .--> CloudWatch
+    Handler --> TokenBucket
+    Handler --> FixedWindow
+    Handler --> SlidingWindow
+
+    TokenBucket --> Atomic
+    FixedWindow --> Atomic
+    SlidingWindow --> Atomic
+
+    Atomic --> ElastiCache

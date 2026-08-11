@@ -1,0 +1,16 @@
+---
+config:
+  flowchart:
+    curve: natural
+---
+
+flowchart LR
+
+node1["read tokens<br/>+ previous timestamp"] --> node2["calculate elapsed time"]
+node2 --> node3["calculate<br> refill"]
+node3 --> node4["cap tokens<br/>at capacity"]
+node4 --> node5{"enough tokens?"}
+node5 -->|yes| node6["consume<br/>one" ]
+node5 -->|no| node7["reject" ]
+node6 --> node8["persist<br/>new state" ]
+node7 --> node8
